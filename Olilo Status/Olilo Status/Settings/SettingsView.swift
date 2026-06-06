@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @State private var presentedWebPage: SettingsWebPage?
+
     var body: some View {
         NavigationStack {
             Form {
@@ -17,13 +19,19 @@ struct SettingsView: View {
                         SettingsRowLabel(title: "About", systemImage: "info.circle", titleColor: Color.oliloPurple)
                     }
 
-                    Link(destination: URL(string: "https://olilo.co.uk/privacy")!) {
+                    Button {
+                        presentedWebPage = .privacyPolicy
+                    } label: {
                         SettingsRowLabel(title: "Privacy Policy", systemImage: "hand.raised")
                     }
+                    .buttonStyle(.plain)
 
-                    Link(destination: URL(string: "https://olilo.co.uk/terms")!) {
+                    Button {
+                        presentedWebPage = .termsAndConditions
+                    } label: {
                         SettingsRowLabel(title: "Terms & Conditions", systemImage: "doc.plaintext")
                     }
+                    .buttonStyle(.plain)
                 }
 
                 Section("Olilo Status") {
@@ -48,6 +56,30 @@ struct SettingsView: View {
             }
         }
         .tint(Color.oliloPurple)
+        .sheet(item: $presentedWebPage) { webPage in
+            OliloWebViewSheet(title: webPage.title, url: webPage.url)
+        }
+    }
+}
+
+private enum SettingsWebPage: Identifiable {
+    case privacyPolicy
+    case termsAndConditions
+
+    var id: String { title }
+
+    var title: String {
+        switch self {
+        case .privacyPolicy: return "Privacy Policy"
+        case .termsAndConditions: return "Terms & Conditions"
+        }
+    }
+
+    var url: URL {
+        switch self {
+        case .privacyPolicy: return URL(string: "https://olilo.co.uk/privacy")!
+        case .termsAndConditions: return URL(string: "https://olilo.co.uk/terms")!
+        }
     }
 }
 

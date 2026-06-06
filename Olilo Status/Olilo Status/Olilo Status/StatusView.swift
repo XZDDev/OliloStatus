@@ -161,6 +161,9 @@ final class StatusViewModel: ObservableObject {
 
 struct StatusView: View {
     @StateObject private var model = StatusViewModel()
+    @State private var isDashboardPresented = false
+
+    private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser")
 
     var body: some View {
         NavigationStack {
@@ -219,7 +222,9 @@ struct StatusView: View {
                                 }
                             }
 
-                            StatusSectionHeader(title: "Components", count: model.components.count)
+                            StatusSectionHeader(title: "Components", count: model.components.count) {
+                                isDashboardPresented = true
+                            }
                             ForEach(model.componentGroups) { group in
                                 ComponentGroupCard(group: group)
                                     .padding(.horizontal)
@@ -249,6 +254,11 @@ struct StatusView: View {
             }
             .task { await model.refresh() }
             .background(OliloDarkGradientBackground())
+            .sheet(isPresented: $isDashboardPresented) {
+                if let dashboardURL {
+                    OliloWebViewSheet(title: "Dashboard", url: dashboardURL)
+                }
+            }
         }
     }
 }
@@ -256,6 +266,13 @@ struct StatusView: View {
 private struct StatusSectionHeader: View {
     let title: String
     let count: Int
+    var dashboardAction: (() -> Void)?
+
+    init(title: String, count: Int, dashboardAction: (() -> Void)? = nil) {
+        self.title = title
+        self.count = count
+        self.dashboardAction = dashboardAction
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -268,6 +285,12 @@ private struct StatusSectionHeader: View {
                 .padding(.vertical, 4)
                 .background(.thinMaterial, in: Capsule())
             Spacer()
+            if let dashboardAction {
+                Button("Grafana Dashboard", action: dashboardAction)
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.bordered)
+                    .tint(Color.oliloPurple)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
@@ -281,6 +304,8 @@ private struct OverviewCard: View {
     let incidentCount: Int
     let maintenanceCount: Int
     let lastRefreshed: Date?
+
+    @State private var isStatusPagePresented = false
 
     var body: some View {
         StatusCard {
@@ -308,10 +333,13 @@ private struct OverviewCard: View {
                 }
 
                 HStack {
-                    Link(destination: summary.page.url) {
-                        Label("Status page", systemImage: "safari")
+                    Button {
+                        isStatusPagePresented = true
+                    } label: {
+                        Label("Olilo Status", systemImage: "gauge")
                             .foregroundStyle(Color.oliloPurple)
                     }
+                    .buttonStyle(.plain)
                     .tint(Color.oliloPurple)
                     Spacer()
                     if let lastRefreshed {
@@ -322,6 +350,9 @@ private struct OverviewCard: View {
                 }
                 .font(.callout.weight(.medium))
             }
+        }
+        .sheet(isPresented: $isStatusPagePresented) {
+            OliloWebViewSheet(title: "Olilo Status", url: summary.page.url)
         }
     }
 }
