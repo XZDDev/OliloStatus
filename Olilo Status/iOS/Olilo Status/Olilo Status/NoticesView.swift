@@ -523,7 +523,7 @@ private final class AtomNoticeParser: NSObject, XMLParserDelegate {
         let affected = value(after: "Affected Components:", in: text)
         let updates = parseUpdates(fromHTML: entry.content)
         let summary = updates.first?.message ?? text
-        let id = entry.link?.lastPathComponent ?? entry.id
+        let id = entry.id.isEmpty ? "notice-\(entry.link?.absoluteString ?? entry.title)" : entry.id
 
         return StatusNotice(
             id: id,

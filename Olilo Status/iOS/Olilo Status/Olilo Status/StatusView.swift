@@ -639,7 +639,7 @@ func statusSeverity(_ status: String) -> Int {
         return 0
     case "UNDERMAINTENANCE", "MONITORING", "NOTSTARTEDYET":
         return 1
-    case "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":
+    case "HASISSUES", "HAS_ISSUES", "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":
         return 2
     case "PARTIALOUTAGE", "PARTIAL_OUTAGE", "INVESTIGATING":
         return 3
@@ -660,7 +660,7 @@ func statusColor(_ status: String) -> Color {
         return .oliloPurple
     case "UNDERMAINTENANCE", "MONITORING", "NOTSTARTEDYET":
         return .blue
-    case "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":
+    case "HASISSUES", "HAS_ISSUES", "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":
         return .orange
     case "PARTIALOUTAGE", "PARTIAL_OUTAGE", "INVESTIGATING":
         return .yellow
@@ -675,6 +675,8 @@ func readableStatus(_ status: String) -> String {
     let replacements = [
         "UP": "Up",
         "OPERATIONAL": "Operational",
+        "HASISSUES": "Has issues",
+        "HAS_ISSUES": "Has issues",
         "UNDERMAINTENANCE": "Under maintenance",
         "DEGRADEDPERFORMANCE": "Degraded performance",
         "DEGRADED_PERFORMANCE": "Degraded performance",
