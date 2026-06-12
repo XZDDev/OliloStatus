@@ -1,5 +1,6 @@
 package uk.co.olilo.status
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -42,13 +43,18 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -58,6 +64,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -65,6 +72,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -198,6 +206,7 @@ private fun GradientBackground(content: @Composable () -> Unit) {
 private fun OliloTopBar(
     title: String,
     onRefresh: (() -> Unit)? = null,
+    onConfigure: (() -> Unit)? = null,
     navController: NavHostController? = null,
 ) {
     Box(
@@ -226,16 +235,26 @@ private fun OliloTopBar(
                 modifier = Modifier.height(24.dp),
             )
         }
-        if (onRefresh != null) {
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = "Refresh",
-                    tint = OliloPurple,
-                )
+        if (onConfigure != null || onRefresh != null) {
+            Row(modifier = Modifier.align(Alignment.CenterEnd)) {
+                if (onConfigure != null) {
+                    IconButton(onClick = onConfigure) {
+                        Icon(
+                            Icons.Filled.Tune,
+                            contentDescription = "Edit status components",
+                            tint = OliloPurple,
+                        )
+                    }
+                }
+                if (onRefresh != null) {
+                    IconButton(onClick = onRefresh) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "Refresh",
+                            tint = OliloPurple,
+                        )
+                    }
+                }
             }
         }
     }
@@ -341,12 +360,88 @@ private fun LoadingOrError(
     }
 }
 
+private const val ComponentPreferencesName = "status_component_display_preferences"
+private const val HiddenGroupIdsKey = "hidden_group_ids"
+private const val OrderedGroupIdsKey = "ordered_group_ids"
+
+private data class ComponentDisplayPreferences(
+    val hiddenGroupIds: Set<String> = emptySet(),
+    val orderedGroupIds: List<String> = emptyList(),
+) {
+    fun orderedGroups(groups: List<StatusComponentGroup>): List<StatusComponentGroup> {
+        val byId = groups.associateBy { it.id }
+        val ordered = orderedGroupIds.mapNotNull { byId[it] }
+        val orderedIds = ordered.map { it.id }.toSet()
+        return ordered + groups.filterNot { it.id in orderedIds }
+    }
+
+    fun visibleGroups(groups: List<StatusComponentGroup>): List<StatusComponentGroup> =
+        orderedGroups(groups).filterNot { it.id in hiddenGroupIds }
+
+    fun isVisible(group: StatusComponentGroup): Boolean = group.id !in hiddenGroupIds
+
+    fun withVisibility(group: StatusComponentGroup, isVisible: Boolean): ComponentDisplayPreferences =
+        copy(hiddenGroupIds = if (isVisible) hiddenGroupIds - group.id else hiddenGroupIds + group.id)
+
+    fun moved(fromIndex: Int, toIndex: Int, groups: List<StatusComponentGroup>): ComponentDisplayPreferences {
+        val ids = orderedGroups(groups).map { it.id }.toMutableList()
+        if (fromIndex !in ids.indices || toIndex !in ids.indices) return this
+        val moved = ids.removeAt(fromIndex)
+        ids.add(toIndex, moved)
+        return copy(orderedGroupIds = ids)
+    }
+
+    fun withAllShown(): ComponentDisplayPreferences = copy(hiddenGroupIds = emptySet())
+}
+
+private fun loadComponentDisplayPreferences(context: Context): ComponentDisplayPreferences {
+    val sharedPreferences = context.getSharedPreferences(ComponentPreferencesName, Context.MODE_PRIVATE)
+    return ComponentDisplayPreferences(
+        hiddenGroupIds = sharedPreferences.getStringSet(HiddenGroupIdsKey, mutableSetOf()).orEmpty().toSet(),
+        orderedGroupIds = sharedPreferences.getString(OrderedGroupIdsKey, null)
+            ?.split('|')
+            ?.filter { it.isNotBlank() }
+            .orEmpty(),
+    )
+}
+
+private fun saveComponentDisplayPreferences(context: Context, preferences: ComponentDisplayPreferences) {
+    context.getSharedPreferences(ComponentPreferencesName, Context.MODE_PRIVATE)
+        .edit()
+        .putStringSet(HiddenGroupIdsKey, preferences.hiddenGroupIds.toMutableSet())
+        .putString(OrderedGroupIdsKey, preferences.orderedGroupIds.joinToString("|"))
+        .apply()
+}
+
+private fun visibleAffectedComponents(
+    components: List<StatusComponent>,
+    preferences: ComponentDisplayPreferences,
+): List<StatusComponent> = components
+    .filter { statusSeverity(it.status) > 0 }
+    .filter { component ->
+        val groupId = component.group?.id ?: component.id
+        groupId !in preferences.hiddenGroupIds
+    }
+    .sortedByDescending { statusSeverity(it.status) }
+
 @Composable
 private fun StatusScreen(navController: NavHostController, viewModel: StatusViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var displayPreferences by remember { mutableStateOf(loadComponentDisplayPreferences(context)) }
+    var showComponentEditor by remember { mutableStateOf(false) }
+
+    fun updateDisplayPreferences(preferences: ComponentDisplayPreferences) {
+        displayPreferences = preferences
+        saveComponentDisplayPreferences(context, preferences)
+    }
 
     Column(Modifier.fillMaxSize()) {
-        OliloTopBar(title = "Status", onRefresh = viewModel::refresh)
+        OliloTopBar(
+            title = "Status",
+            onRefresh = viewModel::refresh,
+            onConfigure = { showComponentEditor = true },
+        )
         if ((state.isLoading && state.summary == null) || state.errorMessage != null) {
             LoadingOrError(
                 loadingText = "Loading status...",
@@ -358,23 +453,40 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             return@Column
         }
 
+        val componentGroups = groupedComponents(state.components)
+        val visibleComponentGroups = displayPreferences.visibleGroups(componentGroups)
+        val visibleAffected = visibleAffectedComponents(state.components, displayPreferences)
+        val visibleComponentCount = visibleComponentGroups.sumOf { it.allComponents.size }
+
+        if (showComponentEditor) {
+            ComponentDisplayEditorDialog(
+                groups = componentGroups,
+                preferences = displayPreferences,
+                onPreferencesChange = ::updateDisplayPreferences,
+                onDismiss = { showComponentEditor = false },
+            )
+        }
+
         LazyColumn(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             state.summary?.let { summary ->
                 item {
-                    OverviewCard(summary, state, navController)
+                    OverviewCard(
+                        summary = summary,
+                        state = state,
+                        componentCount = visibleComponentCount,
+                        affectedCount = visibleAffected.size,
+                        navController = navController,
+                    )
                 }
-                val affected = state.components
-                    .filter { statusSeverity(it.status) > 0 }
-                    .sortedByDescending { statusSeverity(it.status) }
-                if (affected.isNotEmpty()) {
-                    item { SectionHeader("Affected Services", affected.size) }
+                if (visibleAffected.isNotEmpty()) {
+                    item { SectionHeader("Affected Services", visibleAffected.size) }
                     item {
                         StatusCard {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                affected.forEach { ComponentRow(it, showGroup = true) }
+                                visibleAffected.forEach { ComponentRow(it, showGroup = true) }
                             }
                         }
                     }
@@ -392,7 +504,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             }
 
             item {
-                SectionHeader("Components", state.components.size) {
+                SectionHeader("Components", visibleComponentCount) {
                     ExternalUrlButton(
                         label = "Dashboard",
                         url = "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser",
@@ -400,15 +512,119 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                     )
                 }
             }
-            items(groupedComponents(state.components), key = { it.id }) { group ->
-                ComponentGroupCard(group)
+            if (visibleComponentGroups.isEmpty()) {
+                item { EmptyComponentsCard() }
+            } else {
+                items(visibleComponentGroups, key = { it.id }) { group ->
+                    ComponentGroupCard(group)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun OverviewCard(summary: StatusPageSummary, state: StatusScreenState, navController: NavHostController) {
+private fun ComponentDisplayEditorDialog(
+    groups: List<StatusComponentGroup>,
+    preferences: ComponentDisplayPreferences,
+    onPreferencesChange: (ComponentDisplayPreferences) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val orderedGroups = preferences.orderedGroups(groups)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Components") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    "Hidden components are removed from the status page and affected-services summary.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFFCEC1D8),
+                )
+                orderedGroups.forEachIndexed { index, group ->
+                    ComponentDisplayEditorRow(
+                        group = group,
+                        isVisible = preferences.isVisible(group),
+                        canMoveUp = index > 0,
+                        canMoveDown = index < orderedGroups.lastIndex,
+                        onVisibilityChange = { isVisible ->
+                            onPreferencesChange(preferences.withVisibility(group, isVisible))
+                        },
+                        onMoveUp = { onPreferencesChange(preferences.moved(index, index - 1, groups)) },
+                        onMoveDown = { onPreferencesChange(preferences.moved(index, index + 1, groups)) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Done") }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = { onPreferencesChange(preferences.withAllShown()) },
+                enabled = preferences.hiddenGroupIds.isNotEmpty(),
+            ) {
+                Text("Show All")
+            }
+        },
+        containerColor = Color(0xF2261737),
+        titleContentColor = Color.White,
+        textContentColor = Color.White,
+    )
+}
+
+@Composable
+private fun ComponentDisplayEditorRow(
+    group: StatusComponentGroup,
+    isVisible: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onVisibilityChange: (Boolean) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+            Text(group.name, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                "${group.allComponents.size} service${if (group.allComponents.size == 1) "" else "s"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFCEC1D8),
+            )
+        }
+        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up", tint = OliloPurple)
+        }
+        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down", tint = OliloPurple)
+        }
+        Switch(checked = isVisible, onCheckedChange = onVisibilityChange)
+    }
+}
+
+@Composable
+private fun EmptyComponentsCard() {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = OliloPurple)
+            Text("No components shown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("Use the component editor to show services on this page.", color = Color(0xFFCEC1D8))
+        }
+    }
+}
+
+@Composable
+private fun OverviewCard(
+    summary: StatusPageSummary,
+    state: StatusScreenState,
+    componentCount: Int,
+    affectedCount: Int,
+    navController: NavHostController,
+) {
     StatusCard {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -429,8 +645,8 @@ private fun OverviewCard(summary: StatusPageSummary, state: StatusScreenState, n
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                MetricTile("Components", state.components.size.toString(), Modifier.weight(1f))
-                MetricTile("Affected", state.components.count { statusSeverity(it.status) > 0 }.toString(), Modifier.weight(1f))
+                MetricTile("Components", componentCount.toString(), Modifier.weight(1f))
+                MetricTile("Affected", affectedCount.toString(), Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MetricTile("Incidents", state.incidents.size.toString(), Modifier.weight(1f))
@@ -501,16 +717,63 @@ private fun MaintenanceCard(maintenance: Maintenance, navController: NavHostCont
 
 @Composable
 private fun ComponentGroupCard(group: StatusComponentGroup) {
+    var expanded by remember(group.id) { mutableStateOf(false) }
+    val hasExpandableDetails = group.children.isNotEmpty() || !group.description.isNullOrBlank()
+
     StatusCard {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TitleStatusRow(
-                title = group.name,
-                subtitle = group.description ?: "${group.allComponents.size} service${if (group.allComponents.size == 1) "" else "s"}",
-                status = group.worstStatus,
+            ComponentGroupHeader(
+                group = group,
+                expanded = expanded,
+                hasExpandableDetails = hasExpandableDetails,
+                onToggle = { expanded = !expanded },
             )
-            val visible = if (group.parent != null && group.children.isEmpty()) listOf(group.parent) else group.children
-            visible.filterNotNull().forEach { ComponentRow(it, showGroup = false) }
+
+            if (hasExpandableDetails && expanded) {
+                ComponentGroupDetails(group)
+            }
         }
+    }
+}
+
+@Composable
+private fun ComponentGroupHeader(
+    group: StatusComponentGroup,
+    expanded: Boolean,
+    hasExpandableDetails: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (hasExpandableDetails) Modifier.clickable(onClick = onToggle) else Modifier),
+    ) {
+        StatusDot(group.worstStatus, 10)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(group.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(readableStatus(group.worstStatus), style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
+        }
+        StatusBadge(readableStatus(group.worstStatus), group.worstStatus)
+        if (hasExpandableDetails) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse component" else "Expand component",
+                tint = OliloPurple,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ComponentGroupDetails(group: StatusComponentGroup) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        group.description?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
+        }
+        group.children.forEach { ComponentRow(it, showGroup = false) }
     }
 }
 

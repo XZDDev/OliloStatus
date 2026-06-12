@@ -71,6 +71,55 @@ struct StatusComponentGroup: Identifiable {
     }
 }
 
+struct StatusComponentDisplayPreferences: Codable, Equatable {
+    var hiddenGroupIDs: Set<String> = []
+    var orderedGroupIDs: [String] = []
+
+    static let storageKey = "statusComponentDisplayPreferences"
+
+    static func load() -> StatusComponentDisplayPreferences {
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else {
+            return StatusComponentDisplayPreferences()
+        }
+        return (try? JSONDecoder().decode(StatusComponentDisplayPreferences.self, from: data)) ?? StatusComponentDisplayPreferences()
+    }
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+
+    func orderedGroups(from groups: [StatusComponentGroup]) -> [StatusComponentGroup] {
+        let groupsByID = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, $0) })
+        var ordered = orderedGroupIDs.compactMap { groupsByID[$0] }
+        let orderedIDs = Set(ordered.map(\.id))
+        ordered.append(contentsOf: groups.filter { !orderedIDs.contains($0.id) })
+        return ordered
+    }
+
+    func visibleGroups(from groups: [StatusComponentGroup]) -> [StatusComponentGroup] {
+        orderedGroups(from: groups).filter { !hiddenGroupIDs.contains($0.id) }
+    }
+
+    func isGroupVisible(_ group: StatusComponentGroup) -> Bool {
+        !hiddenGroupIDs.contains(group.id)
+    }
+
+    mutating func setGroup(_ group: StatusComponentGroup, isVisible: Bool) {
+        if isVisible {
+            hiddenGroupIDs.remove(group.id)
+        } else {
+            hiddenGroupIDs.insert(group.id)
+        }
+    }
+
+    mutating func moveGroups(from source: IndexSet, to destination: Int, groups: [StatusComponentGroup]) {
+        var orderedIDs = orderedGroups(from: groups).map(\.id)
+        orderedIDs.move(fromOffsets: source, toOffset: destination)
+        orderedGroupIDs = orderedIDs
+    }
+}
+
 @MainActor
 final class StatusViewModel: ObservableObject {
     @Published var summary: StatusPageSummary?
@@ -137,6 +186,20 @@ final class StatusViewModel: ObservableObject {
         }
     }
 
+    func visibleComponentGroups(using preferences: StatusComponentDisplayPreferences) -> [StatusComponentGroup] {
+        preferences.visibleGroups(from: componentGroups)
+    }
+
+    func visibleAffectedComponents(using preferences: StatusComponentDisplayPreferences) -> [StatusComponent] {
+        let hiddenGroupIDs = preferences.hiddenGroupIDs
+        return affectedComponents.filter { component in
+            if let groupID = component.group?.id {
+                return !hiddenGroupIDs.contains(groupID)
+            }
+            return !hiddenGroupIDs.contains(component.id)
+        }
+    }
+
     private let api = StatusAPI()
 
     func refresh() async {
@@ -162,6 +225,8 @@ final class StatusViewModel: ObservableObject {
 struct StatusView: View {
     @StateObject private var model = StatusViewModel()
     @State private var isDashboardPresented = false
+    @State private var isComponentEditorPresented = false
+    @State private var componentDisplayPreferences = StatusComponentDisplayPreferences.load()
 
     private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser")
 
@@ -186,22 +251,26 @@ struct StatusView: View {
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
+                    let visibleComponentGroups = model.visibleComponentGroups(using: componentDisplayPreferences)
+                    let visibleAffectedComponents = model.visibleAffectedComponents(using: componentDisplayPreferences)
+                    let visibleComponentCount = visibleComponentGroups.reduce(0) { $0 + $1.allComponents.count }
+
                     ScrollView {
                         LazyVStack(spacing: 18) {
                             if let summary = model.summary {
                                 OverviewCard(
                                     summary: summary,
-                                    componentCount: model.components.count,
-                                    affectedCount: model.affectedComponents.count,
+                                    componentCount: visibleComponentCount,
+                                    affectedCount: visibleAffectedComponents.count,
                                     incidentCount: model.incidents.count,
                                     maintenanceCount: model.maintenances.count,
                                     lastRefreshed: model.lastRefreshed
                                 )
                                 .padding(.horizontal)
 
-                                if !model.affectedComponents.isEmpty {
-                                    StatusSectionHeader(title: "Affected Services", count: model.affectedComponents.count)
-                                    AffectedServicesCard(components: model.affectedComponents)
+                                if !visibleAffectedComponents.isEmpty {
+                                    StatusSectionHeader(title: "Affected Services", count: visibleAffectedComponents.count)
+                                    AffectedServicesCard(components: visibleAffectedComponents)
                                         .padding(.horizontal)
                                 }
                             }
@@ -222,12 +291,17 @@ struct StatusView: View {
                                 }
                             }
 
-                            StatusSectionHeader(title: "Components", count: model.components.count) {
+                            StatusSectionHeader(title: "Components", count: visibleComponentCount) {
                                 isDashboardPresented = true
                             }
-                            ForEach(model.componentGroups) { group in
-                                ComponentGroupCard(group: group)
+                            if visibleComponentGroups.isEmpty {
+                                EmptyComponentsCard()
                                     .padding(.horizontal)
+                            } else {
+                                ForEach(visibleComponentGroups) { group in
+                                    ComponentGroupCard(group: group)
+                                        .padding(.horizontal)
+                                }
                             }
                         }
                         .padding(.vertical, 18)
@@ -240,7 +314,16 @@ struct StatusView: View {
                 ToolbarItem(placement: .principal) {
                     OliloToolbarLogo()
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        isComponentEditorPresented = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(Color.oliloPurple)
+                    }
+                    .tint(Color.oliloPurple)
+                    .accessibilityLabel("Edit status components")
+
                     Button {
                         Task { await model.refresh() }
                     } label: {
@@ -253,11 +336,104 @@ struct StatusView: View {
                 }
             }
             .task { await model.refresh() }
+            .onChange(of: componentDisplayPreferences) { _, preferences in
+                preferences.save()
+            }
             .background(OliloDarkGradientBackground())
             .sheet(isPresented: $isDashboardPresented) {
                 if let dashboardURL {
                     OliloWebViewSheet(title: "Dashboard", url: dashboardURL)
                 }
+            }
+            .sheet(isPresented: $isComponentEditorPresented) {
+                ComponentDisplayEditor(
+                    groups: model.componentGroups,
+                    preferences: $componentDisplayPreferences
+                )
+            }
+        }
+    }
+}
+
+private struct ComponentDisplayEditor: View {
+    let groups: [StatusComponentGroup]
+    @Binding var preferences: StatusComponentDisplayPreferences
+    @Environment(\.dismiss) private var dismiss
+
+    private var orderedGroups: [StatusComponentGroup] {
+        preferences.orderedGroups(from: groups)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(orderedGroups) { group in
+                        Toggle(isOn: visibilityBinding(for: group)) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(group.name)
+                                    .font(.body.weight(.medium))
+                                Text("\(group.allComponents.count) service\(group.allComponents.count == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .tint(Color.oliloPurple)
+                    }
+                    .onMove { source, destination in
+                        preferences.moveGroups(from: source, to: destination, groups: groups)
+                    }
+                } footer: {
+                    Text("Hidden components are removed from the status page and affected-services summary.")
+                }
+            }
+            .navigationTitle("Components")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    EditButton()
+                        .tint(Color.oliloPurple)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button("Show All") {
+                        preferences.hiddenGroupIDs.removeAll()
+                    }
+                    .disabled(preferences.hiddenGroupIDs.isEmpty)
+                    .tint(Color.oliloPurple)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(OliloDarkGradientBackground())
+        }
+        .tint(Color.oliloPurple)
+    }
+
+    private func visibilityBinding(for group: StatusComponentGroup) -> Binding<Bool> {
+        Binding {
+            preferences.isGroupVisible(group)
+        } set: { isVisible in
+            preferences.setGroup(group, isVisible: isVisible)
+        }
+    }
+}
+
+private struct EmptyComponentsCard: View {
+    var body: some View {
+        StatusCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: "eye.slash")
+                    .font(.title2)
+                    .foregroundStyle(Color.oliloPurple)
+                Text("No components shown")
+                    .font(.headline)
+                Text("Use the component editor to show services on this page.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -455,35 +631,61 @@ private struct MaintenanceCard: View {
 private struct ComponentGroupCard: View {
     let group: StatusComponentGroup
 
+    @State private var isExpanded = false
+
+    private var hasExpandableDetails: Bool {
+        group.children.isEmpty == false || group.description?.isEmpty == false
+    }
+
     var body: some View {
         StatusCard {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    StatusDot(status: group.worstStatus)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.name)
-                            .font(.headline)
-                        if let description = group.description, !description.isEmpty {
-                            Text(description)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("\(group.allComponents.count) service\(group.allComponents.count == 1 ? "" : "s")")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    StatusBadge(text: readableStatus(group.worstStatus), status: group.worstStatus)
+            if hasExpandableDetails {
+                DisclosureGroup(isExpanded: $isExpanded) {
+                    ComponentGroupDetails(group: group)
+                        .padding(.top, 12)
+                } label: {
+                    ComponentGroupHeader(group: group)
                 }
+                .tint(Color.oliloPurple)
+            } else {
+                ComponentGroupHeader(group: group)
+            }
+        }
+    }
+}
 
-                if let parent = group.parent, group.children.isEmpty {
-                    ComponentRow(component: parent, showGroup: false)
-                } else {
-                    ForEach(group.children) { component in
-                        ComponentRow(component: component, showGroup: false)
-                    }
-                }
+private struct ComponentGroupHeader: View {
+    let group: StatusComponentGroup
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            StatusDot(status: group.worstStatus)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name)
+                    .font(.headline)
+                Text(readableStatus(group.worstStatus))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            StatusBadge(text: readableStatus(group.worstStatus), status: group.worstStatus)
+        }
+    }
+}
+
+private struct ComponentGroupDetails: View {
+    let group: StatusComponentGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let description = group.description, !description.isEmpty {
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(group.children) { component in
+                ComponentRow(component: component, showGroup: false)
             }
         }
     }
