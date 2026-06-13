@@ -139,6 +139,37 @@ instead of waiting for the interval.
 
 Unauthenticated liveness probe -> `{ "status": "ok" }`.
 
+## CLI
+
+A small ops CLI talks straight to the database, so it works without the server
+running (it reads the same `.env`):
+
+```sh
+npm run cli -- <command>      # or: node src/cli.js <command>
+```
+
+| Command | Does |
+| --- | --- |
+| `devices [--all] [--json]` | List registered devices (active only by default). |
+| `stats` | Device counts and preference breakdown. |
+| `state` | Active incidents/maintenance and component health. |
+| `poll` | Fetch the status page now and dispatch notifications. |
+| `remove <token>` | Delete a device by token. |
+| `test <token> [message]` | Send a test push to one device. |
+
+Example:
+
+```
+$ npm run cli -- devices
+ID  PLATFORM  TOKEN              PREFS            VER  ACTIVE  SEEN
+--  --------  -----------------  ---------------  ---  ------  ----
+2   ios       ios-toke...aa1111  IMC [Openreach]  0.1  yes     3m
+1   android   android-...bb2222  I                0.1  yes     5m
+```
+
+(`PREFS` shows which alerts are on: **I**ncidents, **M**aintenance, **C**omponent,
+plus any network filter.)
+
 ## Notification payloads
 
 Notifications carry a `data` block the apps can use for deep-linking:
@@ -163,6 +194,7 @@ Notifications carry a `data` block the apps can use for deep-linking:
 ```
 src/
   index.js              Express app, graceful shutdown
+  cli.js                Ops CLI (devices, stats, state, poll, ...)
   config.js             Env parsing + validation
   db/                   Pool, migrations, migration runner
   routes/devices.js     Device registration API
