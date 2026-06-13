@@ -35,8 +35,10 @@ server {
 
     # Authenticated Origin Pulls: require Cloudflare's client certificate, so the
     # origin refuses connections that don't come through Cloudflare.
+    # Set MTLS_MODE=off in .env to disable enforcement during initial rollout
+    # (before Authenticated Origin Pulls is enabled in Cloudflare).
     ssl_client_certificate /etc/nginx/cf/authenticated_origin_pull_ca.pem;
-    ssl_verify_client on;
+    ssl_verify_client ${MTLS_MODE};
 
     # Hardening
     server_tokens off;

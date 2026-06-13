@@ -13,7 +13,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U olilo']
+      # Pass -d so pg_isready doesn't default the dbname to the user ("olilo"),
+      # which would log a FATAL "database olilo does not exist" on every check.
+      test: ['CMD-SHELL', 'pg_isready -U olilo -d olilo_status']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,7 +55,9 @@ services:
     # so nginx's own $variables are left intact.
     environment:
       PROXY_DOMAIN: ${PROXY_DOMAIN:-notifications.example.com}
-      NGINX_ENVSUBST_FILTER: PROXY_DOMAIN
+      # mTLS enforcement: 'on' (require Cloudflare's client cert) or 'off'.
+      MTLS_MODE: ${MTLS_MODE:-on}
+      NGINX_ENVSUBST_FILTER: '^(PROXY_DOMAIN|MTLS_MODE)$$'
     ports:
       - '80:80'
       - '443:443'

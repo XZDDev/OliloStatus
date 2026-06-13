@@ -57,9 +57,13 @@ curl -fsSL https://developers.cloudflare.com/ssl/static/authenticated_origin_pul
   -o proxy/cf/authenticated_origin_pull_ca.pem
 ```
 
-> To disable mTLS temporarily (e.g. first boot before it's configured), comment
-> out the `ssl_client_certificate` / `ssl_verify_client` lines in
-> `default.conf.template`.
+> **Rollout order matters.** With mTLS on, the origin returns
+> `400 No required SSL certificate was sent` until Cloudflare actually presents
+> its client cert - i.e. until Authenticated Origin Pulls is enabled in the
+> dashboard. To bring the proxy up first and enable mTLS afterwards, set
+> `MTLS_MODE=off` in `.env`, get Cloudflare -> origin working with just the
+> Origin Certificate, then enable Authenticated Origin Pulls and flip
+> `MTLS_MODE=on` (the CA file above is still required either way).
 
 ### 3. DNS
 
