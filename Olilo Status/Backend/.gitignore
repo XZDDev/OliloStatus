@@ -7,3 +7,9 @@ node_modules/
 secrets/
 *.p8
 firebase-service-account*.json
+
+# Reverse proxy TLS material - never commit the origin private key
+proxy/certs/*
+!proxy/certs/.gitkeep
+proxy/cf/*
+!proxy/cf/.gitkeep

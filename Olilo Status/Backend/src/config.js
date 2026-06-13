@@ -27,9 +27,10 @@ function readSecret(inline, path) {
 
 const apnsEnabled = bool(process.env.APNS_ENABLED, true);
 const fcmEnabled = bool(process.env.FCM_ENABLED, true);
+const port = int(process.env.PORT, 3000);
 
 export const config = {
-  port: int(process.env.PORT, 3000),
+  port,
   apiKey: process.env.API_KEY?.trim() || null,
 
   database: {

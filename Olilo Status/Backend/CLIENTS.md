@@ -31,7 +31,7 @@ In `OliloNotifications.swift`:
 
 ```swift
 enum OliloNotificationConfig {
-    static let baseURL = URL(string: "https://notifications.olilo.co.uk")!
+    static let baseURL = URL(string: "https://notifications.example.com")!
     static let apiKey: String? = nil   // set if the backend uses API_KEY
 }
 ```
@@ -138,7 +138,7 @@ In `android/app/src/main/AndroidManifest.xml`, add the permission and service:
 In `OliloNotifications.kt`:
 
 ```kotlin
-const val BASE_URL = "https://notifications.olilo.co.uk"
+const val BASE_URL = "https://notifications.example.com"
 val API_KEY: String? = null   // set if the backend uses API_KEY
 ```
 

@@ -1,0 +1,67 @@
+# Reverse proxy for the notifications backend.
+# Fronted by Cloudflare (proxied / orange-cloud). See proxy/README.md.
+# ${PROXY_DOMAIN} is substituted from the env var at container start.
+
+# Restore the real visitor IP from Cloudflare's CF-Connecting-IP header, but
+# only trust it when the connection comes from a Cloudflare address.
+include /etc/nginx/cloudflare-ips.conf;
+real_ip_header CF-Connecting-IP;
+
+# Per-visitor rate limiting for the API.
+limit_req_zone $binary_remote_addr zone=api:10m rate=20r/s;
+
+# Redirect any plain HTTP to HTTPS (Cloudflare talks HTTPS to the origin under
+# Full (strict), but this covers stray direct hits).
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${PROXY_DOMAIN};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${PROXY_DOMAIN};
+
+    # TLS between Cloudflare and this origin (Cloudflare Origin Certificate).
+    ssl_certificate     /etc/nginx/certs/origin.crt;
+    ssl_certificate_key /etc/nginx/certs/origin.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # Authenticated Origin Pulls: require Cloudflare's client certificate, so the
+    # origin refuses connections that don't come through Cloudflare.
+    ssl_client_certificate /etc/nginx/cf/authenticated_origin_pull_ca.pem;
+    ssl_verify_client on;
+
+    # Hardening
+    server_tokens off;
+    client_max_body_size 32k;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-Frame-Options DENY always;
+    add_header Referrer-Policy no-referrer always;
+
+    # Health probe (kept lightweight, no rate limit / access log).
+    location = /health {
+        proxy_pass http://app:3000/health;
+        access_log off;
+    }
+
+    location / {
+        limit_req zone=api burst=40 nodelay;
+
+        proxy_pass http://app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+    }
+}

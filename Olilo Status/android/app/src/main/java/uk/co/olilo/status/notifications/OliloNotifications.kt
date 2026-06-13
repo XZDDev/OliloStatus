@@ -23,7 +23,7 @@ import kotlin.coroutines.resumeWithException
  */
 object OliloNotifications {
     /** Base URL of the notifications backend (no trailing slash). */
-    const val BASE_URL = "https://notifications.olilo.co.uk"
+    const val BASE_URL = "https://notifications.example.com"
 
     /**
      * Shared secret sent as `x-api-key`. Leave null if the backend has no

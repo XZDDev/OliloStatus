@@ -31,7 +31,25 @@ mkdir -p secrets              # drop AuthKey.p8 and firebase-service-account.jso
 docker compose up --build
 ```
 
-The app waits for Postgres, runs migrations automatically, and starts polling.
+The app waits for Postgres, runs migrations automatically, and starts polling. By
+default it's bound to `127.0.0.1:3000` (local only) - public traffic goes through
+the reverse proxy.
+
+## Production (behind Cloudflare)
+
+The stack includes an nginx reverse proxy (served on the domain you set in
+`PROXY_DOMAIN`), fronted by Cloudflare. It terminates TLS with a Cloudflare Origin
+Certificate and uses Authenticated Origin Pulls (mTLS) so the origin only accepts
+Cloudflare traffic. It's an opt-in compose profile:
+
+```sh
+# one-time: set PROXY_DOMAIN in .env and drop the Cloudflare origin cert + pull
+# CA into proxy/ (see proxy/README.md)
+docker compose --profile proxy up -d --build
+```
+
+Full setup - origin certificate, Authenticated Origin Pulls, DNS, and hardening -
+is in [`proxy/README.md`](proxy/README.md).
 
 ## Quick start (local Node)
 
@@ -144,7 +162,7 @@ Notifications carry a `data` block the apps can use for deep-linking:
 
 ```
 src/
-  index.js              Express app, auth, graceful shutdown
+  index.js              Express app, graceful shutdown
   config.js             Env parsing + validation
   db/                   Pool, migrations, migration runner
   routes/devices.js     Device registration API

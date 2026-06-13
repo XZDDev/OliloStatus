@@ -11,7 +11,11 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "migrate": "node src/db/migrate.js"
+    "migrate": "node src/db/migrate.js",
+    "cli": "node src/cli.js"
+  },
+  "bin": {
+    "olilo-notify": "src/cli.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

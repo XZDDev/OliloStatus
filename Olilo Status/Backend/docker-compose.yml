@@ -1,12 +1,15 @@
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: olilo
       POSTGRES_PASSWORD: olilo
       POSTGRES_DB: olilo_status
     ports:
-      - '5432:5432'
+      # Host port is configurable to avoid clashing with another local Postgres.
+      # Override by setting DB_PORT in .env (e.g. DB_PORT=5433).
+      - '${DB_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -17,18 +20,48 @@ services:
 
   app:
     build: .
+    restart: unless-stopped
     env_file: .env
     environment:
       # Override the host so the app reaches the compose database, not localhost.
       DATABASE_URL: postgres://olilo:olilo@db:5432/olilo_status
+    # Bound to localhost only - public access goes through the proxy. The proxy
+    # still reaches it as `app:3000` over the compose network.
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     depends_on:
       db:
         condition: service_healthy
     # Mount credentials read-only; keep the real files out of the image.
     volumes:
       - ./secrets:/app/secrets:ro
+
+  # Cloudflare-fronted reverse proxy. Terminates TLS with a Cloudflare Origin
+  # Certificate and only accepts connections that present Cloudflare's client
+  # certificate (Authenticated Origin Pulls), so the origin can't be reached
+  # directly, bypassing Cloudflare. See proxy/README.md for setup.
+  proxy:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    # Opt-in for production (needs the Cloudflare certs in place). Start with:
+    #   docker compose --profile proxy up -d --build
+    profiles: ['proxy']
+    depends_on:
+      - app
+    # The domain is injected into the nginx template at start (envsubst). Set
+    # PROXY_DOMAIN in .env; only that variable is substituted (NGINX_ENVSUBST_FILTER),
+    # so nginx's own $variables are left intact.
+    environment:
+      PROXY_DOMAIN: ${PROXY_DOMAIN:-notifications.example.com}
+      NGINX_ENVSUBST_FILTER: PROXY_DOMAIN
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./proxy/cloudflare-ips.conf:/etc/nginx/cloudflare-ips.conf:ro
+      - ./proxy/certs:/etc/nginx/certs:ro
+      - ./proxy/cf:/etc/nginx/cf:ro
 
 volumes:
   pgdata:

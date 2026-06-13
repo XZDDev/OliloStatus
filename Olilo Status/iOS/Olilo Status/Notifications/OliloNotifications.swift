@@ -35,7 +35,7 @@ import UserNotifications
 
 enum OliloNotificationConfig {
     /// Base URL of the notifications backend (no trailing slash).
-    static let baseURL = URL(string: "https://notifications.olilo.co.uk")!
+    static let baseURL = URL(string: "https://notifications.example.com")!
 
     /// Shared secret sent as `x-api-key`. Leave `nil` if the backend has no
     /// API_KEY configured. Note: a key shipped in the app is not a strong
