@@ -29,6 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import uk.co.olilo.status.status.oliloBackgroundBottom
@@ -110,7 +114,11 @@ private fun WidgetConfigurationScreen(onSourceSelected: (String) -> Unit) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSourceSelected(sourceName) },
+                        .clickable { onSourceSelected(sourceName) }
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = "Use $sourceName as the widget status source"
+                        },
                     shape = RoundedCornerShape(16.dp),
                     color = Color(0xB3261737),
                     contentColor = Color.White,

@@ -65,6 +65,7 @@ struct OliloDarkGradientBackground: View {
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
@@ -74,7 +75,7 @@ struct OliloToolbarLogo: View {
             .resizable()
             .scaledToFit()
             .frame(height: 20)
-            .accessibilityLabel("Olilo")
+            .accessibilityHidden(true)
     }
 }
 

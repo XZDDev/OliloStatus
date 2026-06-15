@@ -22,6 +22,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +47,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dashboard
@@ -58,7 +60,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
@@ -102,6 +106,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -225,7 +235,7 @@ private fun OliloApp(launchRequest: LaunchRequest) {
                 composable(Route.Notices.path) { NoticesScreen(navController) }
                 composable(Route.Settings.path) { SettingsScreen(navController) }
                 composable("notification-settings") { NotificationSettingsScreen(navController) }
-                composable("about") { AboutPage(navController) }
+                composable("credits") { CreditsPage(navController) }
                 composable("contact") { ContactUsPage(navController) }
                 composable("web/{title}/{url}") { entry ->
                     WebPage(
@@ -373,7 +383,11 @@ private fun SectionHeader(title: String, count: Int, action: (@Composable () -> 
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp),
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .semantics(mergeDescendants = true) {
+                heading()
+                contentDescription = "$title, $count"
+            },
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(8.dp))
@@ -540,6 +554,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                         navController = navController,
                     )
                 }
+                item { StatusLinksCard(navController) }
                 if (visibleAffected.isNotEmpty()) {
                     item { SectionHeader("Affected Services", visibleAffected.size) }
                     item {
@@ -563,54 +578,12 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             }
 
             if (visibleComponentGroups.isEmpty()) {
-                item {
-                    SectionHeader("Components", visibleComponentCount) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        ) {
-                            OpenUrlButton(
-                                label = "Open Dashboard",
-                                url = "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser",
-                                navController = navController,
-                                icon = Icons.Filled.Language,
-                            )
-                            OpenUrlButton(
-                                label = "Open Portal",
-                                url = "https://portal.olilo.co.uk",
-                                navController = navController,
-                                icon = Icons.Filled.Language,
-                            )
-                        }
-                    }
-                }
+                item { SectionHeader("Components", visibleComponentCount) }
                 item { EmptyComponentsCard() }
             } else {
                 visibleComponentGroups.forEach { group ->
                     item(key = "${group.id}-header") {
-                        if (group.id == "network") {
-                            SectionHeader(group.name, group.allComponents.size) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                ) {
-                                    OpenUrlButton(
-                                        label = "Open Dashboard",
-                                        url = "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser",
-                                        navController = navController,
-                                        icon = Icons.Filled.Language,
-                                    )
-                                    OpenUrlButton(
-                                        label = "Open Portal",
-                                        url = "https://portal.olilo.co.uk",
-                                        navController = navController,
-                                        icon = Icons.Filled.Language,
-                                    )
-                                }
-                            }
-                        } else {
-                            SectionHeader(group.name, group.allComponents.size)
-                        }
+                        SectionHeader(group.name, group.allComponents.size)
                     }
                     item(key = group.id) {
                         ComponentCategoryCard(group.allComponents)
@@ -618,6 +591,61 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatusLinksCard(navController: NavHostController) {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusLinkButton(
+                    title = "Dashboard",
+                    icon = Icons.Filled.Dashboard,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        navController.openWeb(
+                            "Dashboard",
+                            "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser",
+                        )
+                    },
+                )
+                StatusLinkButton(
+                    title = "Portal",
+                    icon = Icons.Filled.Work,
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.openWeb("Portal", "https://portal.olilo.co.uk") },
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatusLinkButton(
+                    title = "Terminal",
+                    icon = Icons.Filled.Terminal,
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.openWeb("Terminal", "https://terminal.olilo.co.uk") },
+                )
+                StatusLinkButton(
+                    title = "Wiki",
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    modifier = Modifier.weight(1f),
+                    onClick = { navController.openWeb("Wiki", "https://olilo.co.uk/wiki") },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusLinkButton(
+    title: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Button(onClick = onClick, modifier = modifier.height(48.dp)) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -691,7 +719,15 @@ private fun ComponentDisplayEditorRow(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${component.name}, ${componentEditorDetail(component)}"
+                stateDescription = if (isVisible) "Shown" else "Hidden"
+            },
+    ) {
         Column(Modifier.weight(1f)) {
             Text(component.name, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -703,12 +739,19 @@ private fun ComponentDisplayEditorRow(
             )
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move up", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${component.name} up", tint = oliloPurple)
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move down", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${component.name} down", tint = oliloPurple)
         }
-        Switch(checked = isVisible, onCheckedChange = onVisibilityChange)
+        Switch(
+            checked = isVisible,
+            onCheckedChange = onVisibilityChange,
+            modifier = Modifier.semantics {
+                contentDescription = "${component.name} visibility"
+                stateDescription = if (isVisible) "Shown" else "Hidden"
+            },
+        )
     }
 }
 
@@ -791,6 +834,7 @@ private fun OverviewCard(
 @Composable
 private fun PulsingStatusIcon(status: String) {
     val color = statusColor(status)
+    val readable = readableStatus(status)
     val icon = if (statusSeverity(status) == 0) Icons.Filled.CheckCircle else Icons.Filled.Error
     val transition = rememberInfiniteTransition(label = "Status icon pulse")
     val pulse by transition.animateFloat(
@@ -821,7 +865,7 @@ private fun PulsingStatusIcon(status: String) {
         )
         Icon(
             icon,
-            contentDescription = null,
+            contentDescription = "Status: $readable",
             tint = color,
             modifier = Modifier.size(38.dp),
         )
@@ -831,7 +875,11 @@ private fun PulsingStatusIcon(status: String) {
 @Composable
 private fun MetricTile(title: String, value: String, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.height(72.dp),
+        modifier = modifier
+            .height(72.dp)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$title: $value"
+            },
         shape = RoundedCornerShape(14.dp),
         color = Color(0x592B1C3D),
         contentColor = Color.White,
@@ -881,16 +929,23 @@ private fun MaintenanceCard(maintenance: Maintenance, navController: NavHostCont
 
 @Composable
 private fun ComponentRow(component: StatusComponent, showGroup: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    val detail = buildList {
+        add(readableStatus(component.status))
+        if (showGroup) component.group?.name?.let(::add)
+        component.description?.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(" - ")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {
+                contentDescription = "${component.name}, $detail"
+            },
+    ) {
         StatusDot(component.status, 8)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(component.name, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val detail = buildList {
-                add(readableStatus(component.status))
-                if (showGroup) component.group?.name?.let(::add)
-                component.description?.takeIf { it.isNotBlank() }?.let(::add)
-            }.joinToString(" - ")
             Text(detail, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8), maxLines = 2)
         }
         StatusBadge(readableStatus(component.status), component.status)
@@ -1082,7 +1137,12 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
 
 @Composable
 private fun NoticeTitleRow(title: String, subtitle: String, icon: ImageVector, status: String) {
-    Row(verticalAlignment = Alignment.Top) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            contentDescription = "$title, $subtitle, ${readableStatus(status)}"
+        },
+    ) {
         Icon(icon, contentDescription = null, tint = oliloPurple, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -1095,7 +1155,12 @@ private fun NoticeTitleRow(title: String, subtitle: String, icon: ImageVector, s
 
 @Composable
 private fun TitleStatusRow(title: String, subtitle: String, status: String) {
-    Row(verticalAlignment = Alignment.Top) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            contentDescription = "$title, $subtitle, ${readableStatus(status)}"
+        },
+    ) {
         StatusDot(status, 10)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -1166,21 +1231,39 @@ private fun SettingsScreen(navController: NavHostController) {
                 }
             }
             item {
-                SettingsSection("Need Help?") {
-                    SettingsNavRow("Contact Us", Icons.Filled.Email, showDivider = false) { navController.navigate("contact") }
+                SettingsSection("Support") {
+                    SettingsNavRow("Contact Us", Icons.Filled.Email) { navController.navigate("contact") }
+                    SettingsLinkRow(
+                        "Report a Problem",
+                        "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
+                        Icons.Filled.ReportProblem,
+                        navController,
+                        showDivider = false,
+                    )
                 }
             }
             item {
-                SettingsSection("Legal Information") {
-                    SettingsNavRow("About", Icons.Filled.Info) { navController.navigate("about") }
+                SettingsSection("Contributors") {
+                    SettingsNavRow("Credits", Icons.Filled.Info, showDivider = false) { navController.navigate("credits") }
+                }
+            }
+            item {
+                SettingsSection("Compliance") {
                     SettingsLinkRow("Privacy Policy", "https://olilo.co.uk/privacy", Icons.Filled.Description, navController)
                     SettingsLinkRow("Terms & Conditions", "https://olilo.co.uk/terms", Icons.Filled.Description, navController)
+                    SettingsLinkRow(
+                        "Accessibility Statement",
+                        "https://olilo.co.uk/accessibility",
+                        Icons.Filled.Info,
+                        navController,
+                        showDivider = false,
+                    )
                 }
             }
             item {
-                SettingsSection("Olilo Status") {
+                SettingsSection("Version") {
                     SettingsLinkRow(
-                        title = "Contribute to Olilo Status on GitLab",
+                        title = "Contribute to Olilo Status",
                         url = "https://gitlab.com/team-olilo/status-app",
                         icon = Icons.Filled.Language,
                         navController = navController,
@@ -1426,6 +1509,26 @@ private fun SettingsLinkRow(
 }
 
 @Composable
+private fun SettingsExternalRow(
+    title: String,
+    url: String,
+    icon: ImageVector,
+    showDivider: Boolean = true,
+    logoResId: Int? = null,
+) {
+    val context = LocalContext.current
+    SettingsRow(
+        title = title,
+        icon = icon,
+        onClick = {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        },
+        logoResId = logoResId,
+        showDivider = showDivider,
+    )
+}
+
+@Composable
 private fun SettingsNavRow(title: String, icon: ImageVector, showDivider: Boolean = true, onClick: () -> Unit) {
     SettingsRow(title, icon, onClick, showDivider = showDivider)
 }
@@ -1446,7 +1549,7 @@ private fun SettingsToggleRow(
             Switch(
                 checked = checked,
                 enabled = enabled,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = null,
             )
         },
         colors = ListItemDefaults.colors(
@@ -1457,7 +1560,15 @@ private fun SettingsToggleRow(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Transparent)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) },
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .semantics {
+                stateDescription = if (checked) "On" else "Off"
+            },
     )
     if (showDivider) {
         Box(
@@ -1498,7 +1609,10 @@ private fun SettingsRow(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Color.Transparent)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics {
+                role = Role.Button
+            },
     )
     if (showDivider) {
         Box(
@@ -1524,7 +1638,11 @@ private fun WebPage(navController: NavHostController, title: String, url: String
                 }
             },
             update = {},
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = "$title web content"
+                },
         )
     }
 }
@@ -1540,18 +1658,18 @@ private fun ContactUsPage(navController: NavHostController) {
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("Need to contact the team?", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
+            Text("Social", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
             StatusCard {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     SettingsLinkRow(
-                        "Olilo Discord",
+                        "Find us on Discord",
                         "https://discord.gg/olilo",
                         Icons.Filled.Language,
                         navController,
                         R.drawable.logo_discord,
                     )
                     SettingsLinkRow(
-                        "r/Olilo Reddit",
+                        "Find us on Reddit",
                         "https://www.reddit.com/r/Olilo",
                         Icons.Filled.Language,
                         navController,
@@ -1561,7 +1679,28 @@ private fun ContactUsPage(navController: NavHostController) {
                 }
             }
             Text(
-                "Support links open to external services. Official Olilo staff can be identified either by the \"Olilo Management\" & \"Olilo Staff\" flairs on Reddit or \"Management\" & \"Staff\" roles on Discord.",
+                "Support links will open to external sites.",
+                color = Color(0xFFCEC1D8),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text("Email", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
+            StatusCard {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SettingsExternalRow(
+                        "Olilo Support",
+                        "mailto:support@olilo.co.uk",
+                        Icons.Filled.Email,
+                    )
+                    SettingsExternalRow(
+                        "Olilo Sales",
+                        "mailto:sales@olilo.co.uk",
+                        Icons.Filled.Email,
+                        showDivider = false,
+                    )
+                }
+            }
+            Text(
+                "Please provide as much useful information as possible.",
                 color = Color(0xFFCEC1D8),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -1579,9 +1718,9 @@ private fun ContactUsPage(navController: NavHostController) {
 }
 
 @Composable
-private fun AboutPage(navController: NavHostController) {
+private fun CreditsPage(navController: NavHostController) {
     Column(Modifier.fillMaxSize()) {
-        OliloTopBar(title = "About", navController = navController)
+        OliloTopBar(title = "Credits", navController = navController)
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
@@ -1589,11 +1728,14 @@ private fun AboutPage(navController: NavHostController) {
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text("About this application:", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
+            Text("Meet the Developers", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
             StatusCard {
-                Text(ABOUT_TEXT)
+                Text("Olilo Status is a community built application overseen by the official Olilo Team. Listed below are the developers that helped put Olilo Status together.")
             }
-            Text("Olilo Status Contributors:", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
+            Text("Olilo Status Contributors", style = MaterialTheme.typography.titleMedium, color = Color(0xFFCEC1D8))
+            StatusCard {
+                Text("Aaron Doe (Developer)")
+            }
             StatusCard {
                 Text("Aydan Abrahams (Developer)")
             }
@@ -1609,15 +1751,3 @@ private fun AboutPage(navController: NavHostController) {
         }
     }
 }
-
-private const val ABOUT_TEXT = """This application is developed by Aaron Doe and contents herein are owned by Olilo UK & Ireland Ltd.
-
-Aaron Doe (The Developer) is in no way affiliated with Olilo (The Company) other than the development and maintenance of this application.
-
-Unauthorized copying, modification, distribution, or reverse engineering of any part of this application is prohibited except where permitted by law and the project's open source license.
-
-(c) 2026 Olilo UK & Ireland Ltd. All rights reserved.
-
-Company Number: 16352417 (Olilo UK & Ireland Ltd.)
-
-For legal enquiries, please contact us."""

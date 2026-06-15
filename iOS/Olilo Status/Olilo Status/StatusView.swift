@@ -262,11 +262,15 @@ struct StatusView: View {
     @StateObject private var model = StatusViewModel()
     @State private var isDashboardPresented = false
     @State private var isPortalPresented = false
+    @State private var isTerminalPresented = false
+    @State private var isWikiPresented = false
     @State private var isComponentEditorPresented = false
     @State private var componentDisplayPreferences = StatusComponentDisplayPreferences.load()
 
     private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser")
     private let portalURL = URL(string: "https://portal.olilo.co.uk")
+    private let terminalURL = URL(string: "https://terminal.olilo.co.uk")
+    private let wikiURL = URL(string: "https://olilo.co.uk/wiki")
 
     var body: some View {
         NavigationStack {
@@ -278,6 +282,7 @@ struct StatusView: View {
                 } else if let error = model.errorMessage {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle").symbolVariant(.fill)
+                            .accessibilityHidden(true)
                         Text("Failed to load status")
                             .font(.headline)
                         Text(error)
@@ -303,6 +308,16 @@ struct StatusView: View {
                                     incidentCount: model.incidents.count,
                                     maintenanceCount: model.maintenances.count,
                                     lastRefreshed: model.lastRefreshed
+                                )
+                                .padding(.horizontal)
+
+                                StatusLinksCard(
+                                    isTerminalEnabled: terminalURL != nil,
+                                    isWikiEnabled: wikiURL != nil,
+                                    dashboardAction: { isDashboardPresented = true },
+                                    portalAction: { isPortalPresented = true },
+                                    terminalAction: { isTerminalPresented = true },
+                                    wikiAction: { isWikiPresented = true }
                                 )
                                 .padding(.horizontal)
 
@@ -332,11 +347,8 @@ struct StatusView: View {
                             if visibleComponentGroups.isEmpty {
                                 StatusSectionHeader(
                                     title: "Components",
-                                    count: visibleComponentCount,
-                                    portalAction: { isPortalPresented = true }
-                                ) {
-                                    isDashboardPresented = true
-                                }
+                                    count: visibleComponentCount
+                                )
                                 EmptyComponentsCard()
                                     .padding(.horizontal)
                             } else {
@@ -344,11 +356,8 @@ struct StatusView: View {
                                     if group.id == StatusComponentCategory.network.id {
                                         StatusSectionHeader(
                                             title: group.name,
-                                            count: group.allComponents.count,
-                                            portalAction: { isPortalPresented = true }
-                                        ) {
-                                            isDashboardPresented = true
-                                        }
+                                            count: group.allComponents.count
+                                        )
                                     } else {
                                         StatusSectionHeader(title: group.name, count: group.allComponents.count)
                                     }
@@ -396,12 +405,22 @@ struct StatusView: View {
             .background(OliloDarkGradientBackground())
             .sheet(isPresented: $isDashboardPresented) {
                 if let dashboardURL {
-                    OliloWebViewSheet(title: "Olilo Dashboard", url: dashboardURL)
+                    OliloWebViewSheet(title: "Dashboard", url: dashboardURL)
                 }
             }
             .sheet(isPresented: $isPortalPresented) {
                 if let portalURL {
-                    OliloWebViewSheet(title: "Olilo Portal", url: portalURL)
+                    OliloWebViewSheet(title: "Portal", url: portalURL)
+                }
+            }
+            .sheet(isPresented: $isTerminalPresented) {
+                if let terminalURL {
+                    OliloWebViewSheet(title: "Terminal", url: terminalURL)
+                }
+            }
+            .sheet(isPresented: $isWikiPresented) {
+                if let wikiURL {
+                    OliloWebViewSheet(title: "Wiki", url: wikiURL)
                 }
             }
             .sheet(isPresented: $isComponentEditorPresented) {
@@ -509,18 +528,53 @@ private struct EmptyComponentsCard: View {
     }
 }
 
+private struct StatusLinksCard: View {
+    let isTerminalEnabled: Bool
+    let isWikiEnabled: Bool
+    let dashboardAction: () -> Void
+    let portalAction: () -> Void
+    let terminalAction: () -> Void
+    let wikiAction: () -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 10)]
+
+    var body: some View {
+        StatusCard {
+            LazyVGrid(columns: columns, spacing: 10) {
+                StatusLinkButton(title: "Dashboard", systemImage: "chart.line.uptrend.xyaxis", action: dashboardAction)
+                StatusLinkButton(title: "Portal", systemImage: "person.crop.circle", action: portalAction)
+                StatusLinkButton(title: "Terminal", systemImage: "terminal", isEnabled: isTerminalEnabled, action: terminalAction)
+                StatusLinkButton(title: "Wiki", systemImage: "book.closed", isEnabled: isWikiEnabled, action: wikiAction)
+            }
+        }
+    }
+}
+
+private struct StatusLinkButton: View {
+    let title: String
+    let systemImage: String
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(Color.oliloPurple)
+        .disabled(!isEnabled)
+        .accessibilityHint("Opens \(title)")
+    }
+}
+
 private struct StatusSectionHeader: View {
     let title: String
     let count: Int
-    var portalAction: (() -> Void)?
-    var dashboardAction: (() -> Void)?
-
-    init(title: String, count: Int, portalAction: (() -> Void)? = nil, dashboardAction: (() -> Void)? = nil) {
-        self.title = title
-        self.count = count
-        self.portalAction = portalAction
-        self.dashboardAction = dashboardAction
-    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -533,21 +587,11 @@ private struct StatusSectionHeader: View {
                 .padding(.vertical, 4)
                 .background(.thinMaterial, in: Capsule())
             Spacer()
-            if let dashboardAction {
-                Button("Open Dashboard", action: dashboardAction)
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .tint(Color.oliloPurple)
-            }
-            if let portalAction {
-                Button("Open Portal", action: portalAction)
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .tint(Color.oliloPurple)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(count)")
     }
 }
 
@@ -592,6 +636,8 @@ private struct OverviewCard: View {
                     }
                     .buttonStyle(.plain)
                     .tint(Color.oliloPurple)
+                    .accessibilityLabel("Open Olilo Status page")
+                    .accessibilityHint("Opens the public status page")
                     Spacer()
                     if let lastRefreshed {
                         Text("Updated \(lastRefreshed.formatted(date: .omitted, time: .shortened))")
@@ -835,6 +881,17 @@ private struct ComponentRow: View {
     let component: StatusComponent
     let showGroup: Bool
 
+    private var accessibilitySummary: String {
+        var details = [readableStatus(component.status)]
+        if showGroup, let group = component.group {
+            details.append(group.name)
+        }
+        if let description = component.description, !description.isEmpty {
+            details.append(description)
+        }
+        return details.joined(separator: ", ")
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             StatusDot(status: component.status, size: 8)
@@ -861,6 +918,9 @@ private struct ComponentRow: View {
             StatusBadge(text: readableStatus(component.status), status: component.status)
         }
         .padding(.vertical, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(component.name)
+        .accessibilityValue(accessibilitySummary)
     }
 }
 
@@ -903,6 +963,7 @@ private struct StatusDot: View {
             .fill(statusColor(status))
             .frame(width: size, height: size)
             .padding(.top, size == 10 ? 6 : 0)
+            .accessibilityHidden(true)
     }
 }
 
@@ -941,6 +1002,9 @@ private struct MetricPill: View {
         .frame(minHeight: 68, alignment: .topLeading)
         .padding(12)
         .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

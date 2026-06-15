@@ -87,6 +87,7 @@ struct NoticesView: View {
                 } else if let error = model.errorMessage {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle").symbolVariant(.fill)
+                            .accessibilityHidden(true)
                         Text("Failed to load notices")
                             .font(.headline)
                         Text(error)
@@ -185,6 +186,8 @@ private struct NoticeSectionHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), \(count)")
     }
 }
 
@@ -315,6 +318,7 @@ private struct ExpandableNoticeDescription: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.oliloPurple)
             .accessibilityLabel(isExpanded ? "Collapse description" : "Expand description")
+            .accessibilityHint(isExpanded ? "Hides the full description" : "Shows the full description")
         }
     }
 }
@@ -331,6 +335,7 @@ private struct NoticeTitleRow: View {
                 .font(.headline)
                 .foregroundStyle(Color.oliloPurple)
                 .frame(width: 24)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline)

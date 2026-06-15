@@ -75,6 +75,12 @@ class OliloStatusWidgetProvider : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.olilo_status_widget).apply {
                 setTextViewText(R.id.widget_status, statusText)
                 setTextViewText(R.id.widget_source, sourceText)
+                setContentDescription(
+                    R.id.widget_root,
+                    "Olilo Status widget. $sourceText is $statusText. Opens Olilo Status.",
+                )
+                setContentDescription(R.id.widget_status_dot, "$sourceText status: $statusText")
+                setContentDescription(R.id.widget_timeline, "$sourceText status timeline")
                 setInt(R.id.widget_status_dot, "setColorFilter", statusColor)
                 setInt(R.id.widget_timeline, "setColorFilter", statusColor)
                 setOnClickPendingIntent(R.id.widget_root, launchAppIntent(context))

@@ -3,6 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
+    android:contentDescription="@string/widget_root_description"
     android:orientation="vertical"
     android:padding="20dp">
 
@@ -24,7 +25,7 @@
                 android:ellipsize="end"
                 android:fontFamily="sans-serif-medium"
                 android:maxLines="1"
-                android:text="Olilo Status"
+                android:text="@string/app_name"
                 android:textColor="#FFFFFF"
                 android:textSize="22sp"
                 android:textStyle="bold" />
@@ -52,7 +53,7 @@
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-medium"
                     android:maxLines="1"
-                    android:text="Online"
+                    android:text="@string/widget_default_status"
                     android:textColor="#CFC6D8"
                     android:textSize="16sp" />
             </LinearLayout>
@@ -66,7 +67,7 @@
             android:fontFamily="sans-serif-medium"
             android:gravity="end"
             android:maxLines="1"
-            android:text="Openreach"
+            android:text="@string/widget_default_source"
             android:textColor="#CFC6D8"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -96,7 +97,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-medium"
-            android:text="-24 h"
+            android:text="@string/widget_timeline_start"
             android:textColor="#CFC6D8"
             android:textSize="15sp" />
 
@@ -110,7 +111,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="sans-serif-medium"
-            android:text="Now"
+            android:text="@string/widget_timeline_end"
             android:textColor="#CFC6D8"
             android:textSize="15sp" />
     </LinearLayout>
@@ -120,7 +121,7 @@
         android:layout_height="24dp"
         android:layout_marginTop="10dp"
         android:adjustViewBounds="true"
-        android:contentDescription="Olilo"
+        android:contentDescription="@string/app_name"
         android:scaleType="fitCenter"
         android:src="@drawable/olilo" />
 </LinearLayout>

@@ -18,21 +18,27 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Need Help?") {
+                Section("Support") {
                     NavigationLink {
                         ContactUsView()
                     } label: {
                         SettingsRowLabel(title: "Contact Us", systemImage: "envelope")
                     }
+
+                    Link(destination: URL(string: "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269")!) {
+                        SettingsRowLabel(title: "Report a Problem", systemImage: "exclamationmark.bubble")
+                    }
                 }
 
-                Section("Legal Information") {
+                Section("Contributors") {
                     NavigationLink {
-                        AboutView()
+                        CreditsView()
                     } label: {
-                        SettingsRowLabel(title: "About", systemImage: "info.circle")
+                        SettingsRowLabel(title: "Credits", systemImage: "megaphone")
                     }
+                }
 
+                Section("Compliance") {
                     Button {
                         presentedWebPage = .privacyPolicy
                     } label: {
@@ -46,11 +52,18 @@ struct SettingsView: View {
                         SettingsRowLabel(title: "Terms & Conditions", systemImage: "doc.plaintext")
                     }
                     .buttonStyle(.plain)
+
+                    Button {
+                        presentedWebPage = .accessibility
+                    } label: {
+                        SettingsRowLabel(title: "Accessibility Statement", systemImage: "accessibility")
+                    }
+                    .buttonStyle(.plain)
                 }
 
-                Section("Olilo Status") {
+                Section("Version") {
                     Link(destination: URL(string: "https://gitlab.com/team-olilo/status-app")!) {
-                        SettingsAssetRowLabel(title: "Contribute to Olilo Status on GitLab", imageName: "GitLab")
+                        SettingsAssetRowLabel(title: "Contribute to Olilo Status", imageName: "GitLab")
                     }
                     .listRowSeparator(.hidden)
 
@@ -64,6 +77,7 @@ struct SettingsView: View {
                                 .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
                         }
                         .frame(maxWidth: .infinity, alignment: .center)
+                        .accessibilityLabel("App version \(appVersion)")
                         .listRowSeparator(.hidden)
 
                     VStack(spacing: 10) {
@@ -97,6 +111,7 @@ struct SettingsView: View {
 private enum SettingsWebPage: Identifiable {
     case privacyPolicy
     case termsAndConditions
+    case accessibility
 
     var id: String { title }
 
@@ -104,6 +119,7 @@ private enum SettingsWebPage: Identifiable {
         switch self {
         case .privacyPolicy: return "Privacy Policy"
         case .termsAndConditions: return "Terms & Conditions"
+        case .accessibility: return "Accessibility"
         }
     }
 
@@ -111,6 +127,7 @@ private enum SettingsWebPage: Identifiable {
         switch self {
         case .privacyPolicy: return URL(string: "https://olilo.co.uk/privacy")!
         case .termsAndConditions: return URL(string: "https://olilo.co.uk/terms")!
+        case .accessibility: return URL(string: "https://olilo.co.uk/accessibility")!
         }
     }
 }
@@ -152,6 +169,6 @@ private struct SettingsLogo: View {
             .resizable()
             .scaledToFit()
             .frame(height: 44)
-            .accessibilityLabel("Olilo")
+            .accessibilityHidden(true)
     }
 }

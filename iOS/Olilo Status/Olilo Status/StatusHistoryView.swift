@@ -129,8 +129,8 @@ struct StatusHistoryView: View {
                                 .foregroundColor(.primary)
                         }
                     }
-                    .accessibilityLabel("\(point.count) incidents")
-                    .accessibilityValue(Text(point.date, style: selectedRange == .day ? .time : .date))
+                    .accessibilityLabel(Text(point.date, style: selectedRange == .day ? .time : .date))
+                    .accessibilityValue("\(point.count) incident\(point.count == 1 ? "" : "s")")
                 }
                 
                 RuleMark(x: .value("Now", now))

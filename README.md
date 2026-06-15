@@ -11,6 +11,7 @@ Olilo Status the open source status app for the Olilo ISP in the UK & Ireland. I
   <img src="App%20Store/olilo-ios-2.png" width="180" alt="Olilo Status iOS screenshot 2">
   <img src="App%20Store/olilo-ios-3.png" width="180" alt="Olilo Status iOS screenshot 3">
   <img src="App%20Store/olilo-ios-4.png" width="180" alt="Olilo Status iOS screenshot 4">
+  <img src="App%20Store/olilo-ios-5.png" width="180" alt="Olilo Status iOS screenshot 5">
 </p>
 
 ### Android
@@ -20,6 +21,7 @@ Olilo Status the open source status app for the Olilo ISP in the UK & Ireland. I
   <img src="Play%20Store/olilo-android-2.png" width="180" alt="Olilo Status Android screenshot 2">
   <img src="Play%20Store/olilo-android-3.png" width="180" alt="Olilo Status Android screenshot 3">
   <img src="Play%20Store/olilo-android-4.png" width="180" alt="Olilo Status Android screenshot 4">
+  <img src="Play%20Store/olilo-android-5.png" width="180" alt="Olilo Status Android screenshot 5">
 </p>
 
 ## Features
@@ -42,7 +44,7 @@ Current app areas include:
 - `iOS/Olilo Status` - SwiftUI iOS app.
 - `iOS/Olilo Status Widget` - WidgetKit extension.
 - `android` - Kotlin/Jetpack Compose Android app.
-- `android/app/src/main/java/uk/co/olilo/status` - WidgetProvider.
+- `android/app/src/main/java/uk/co/olilo/status/widget` - WidgetProvider.
 - `Backend` - Node.js push-notification service (APNs + FCM).
 - `App Store` - iOS screenshots and store assets.
 - `Play Store` - Android screenshots and store assets.
@@ -92,7 +94,7 @@ The Android app package is `uk.co.olilo.status` and uses Kotlin, Jetpack Compose
 
 ## Contributing
 
-Contributions are welcome. Keep changes focused, follow the existing SwiftUI structure, and include enough context in merge requests for reviewers to understand the behavior change.
+Contributions are welcome. Keep changes focused, follow the existing project structure, and include enough context in merge requests for reviewers to understand the behavior change.
 
 Useful areas for contributions include:
 

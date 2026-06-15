@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">Olilo Status</string>
     <string name="widget_description">Shows whether the selected Olilo network source is online.</string>
+    <string name="widget_root_description">Olilo Status widget</string>
+    <string name="widget_default_status">Online</string>
+    <string name="widget_default_source">Openreach</string>
+    <string name="widget_timeline_start">-24 h</string>
+    <string name="widget_timeline_end">Now</string>
 </resources>
