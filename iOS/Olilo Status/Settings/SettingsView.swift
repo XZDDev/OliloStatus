@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    /// Presents the onboarding tutorial again from the app-level sheet host.
+    let startOnboardingAction: () -> Void
+
     @State private var presentedWebPage: SettingsWebPage?
 
     private var appVersion: String {
@@ -28,6 +31,11 @@ struct SettingsView: View {
                     Link(destination: URL(string: "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269")!) {
                         SettingsRowLabel(title: "Report a Problem", systemImage: "exclamationmark.bubble")
                     }
+
+                    Button(action: startOnboardingAction) {
+                        SettingsRowLabel(title: "Start Onboarding", systemImage: "questionmark.circle")
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 Section("Contributors") {

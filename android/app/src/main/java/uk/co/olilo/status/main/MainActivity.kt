@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -193,9 +194,20 @@ private fun Intent?.requestedRoute(): String = when (this?.getStringExtra(MainAc
 /** Hosts the tab navigation shell and applies launch requests from notifications. */
 @Composable
 private fun OliloApp(launchRequest: LaunchRequest) {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    // Keep onboarding presentation at the app shell so first launch and Settings replay share one flow.
+    var hasCompletedOnboarding by remember { mutableStateOf(loadHasCompletedOnboarding(context)) }
+    var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding) }
+
+    /** Marks onboarding as complete and hides the tutorial. */
+    fun completeOnboarding() {
+        hasCompletedOnboarding = true
+        showOnboarding = false
+        saveHasCompletedOnboarding(context, true)
+    }
 
     LaunchedEffect(launchRequest) {
         if (currentRoute != launchRequest.route) {
@@ -237,7 +249,13 @@ private fun OliloApp(launchRequest: LaunchRequest) {
             ) {
                 composable(Route.Status.path) { StatusScreen(navController) }
                 composable(Route.Notices.path) { NoticesScreen(navController) }
-                composable(Route.Settings.path) { SettingsScreen(navController) }
+                composable(Route.Settings.path) {
+                    SettingsScreen(
+                        navController = navController,
+                        // Replays the tutorial without clearing the completed flag.
+                        onStartOnboarding = { showOnboarding = true },
+                    )
+                }
                 composable("notification-settings") { NotificationSettingsScreen(navController) }
                 composable("credits") { CreditsPage(navController) }
                 composable("contact") { ContactUsPage(navController) }
@@ -250,12 +268,216 @@ private fun OliloApp(launchRequest: LaunchRequest) {
                 }
             }
         }
+
+        // Draw onboarding above the tab scaffold so it behaves like a full-screen modal.
+        if (showOnboarding) {
+            OnboardingScreen(
+                allowBackDismiss = hasCompletedOnboarding,
+                onComplete = ::completeOnboarding,
+                onDismiss = { showOnboarding = false },
+            )
+        }
     }
 }
 
 /** Navigates to the in-app WebView route with URL-safe arguments. */
 private fun NavHostController.openWeb(title: String, url: String) {
     navigate("web/${Uri.encode(title)}/${Uri.encode(url)}")
+}
+
+// Stored separately from component preferences so onboarding can be reset independently if needed.
+private const val ONBOARDING_PREFERENCES_NAME = "onboarding_preferences"
+private const val HAS_COMPLETED_ONBOARDING_KEY = "has_completed_onboarding"
+
+/** Loads whether the first-run onboarding tutorial has been completed. */
+private fun loadHasCompletedOnboarding(context: Context): Boolean =
+    context.getSharedPreferences(ONBOARDING_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .getBoolean(HAS_COMPLETED_ONBOARDING_KEY, false)
+
+/** Persists whether the first-run onboarding tutorial has been completed. */
+private fun saveHasCompletedOnboarding(context: Context, hasCompleted: Boolean) {
+    context.getSharedPreferences(ONBOARDING_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
+        .apply()
+}
+
+/** Describes one onboarding step and the short checklist shown on that page. */
+private data class OnboardingPage(
+    val title: String,
+    val message: String,
+    val icon: ImageVector,
+    val highlights: List<String>,
+)
+
+// Ordered to match the primary app tabs, then the Settings support affordances.
+private val onboardingPages = listOf(
+    OnboardingPage(
+        title = "Track service health",
+        message = "The Status tab gives you a live view of Olilo services, affected components, active incidents, and scheduled maintenance.",
+        icon = Icons.Filled.Dashboard,
+        highlights = listOf(
+            "Refresh status whenever you need the latest update",
+            "Open dashboard, portal, terminal, and wiki links from one place",
+            "Choose which components are shown on your status screen",
+        ),
+    ),
+    OnboardingPage(
+        title = "Follow notices",
+        message = "The Notices tab keeps current and historical incident and maintenance updates together so you can review what changed and when.",
+        icon = Icons.Filled.Notifications,
+        highlights = listOf(
+            "Filter notice history by incident or maintenance",
+            "Open linked incident and maintenance reports",
+            "See current notices before older history",
+        ),
+    ),
+    OnboardingPage(
+        title = "Control notifications",
+        message = "Use Settings to decide which status updates you want delivered to this device.",
+        icon = Icons.Filled.Notifications,
+        highlights = listOf(
+            "Enable alerts for incidents, maintenance, and component changes",
+            "Choose specific networks for component alerts",
+            "Update your preferences at any time",
+        ),
+    ),
+    OnboardingPage(
+        title = "Get help quickly",
+        message = "Settings also includes support, compliance, version, and contributor information when you need it.",
+        icon = Icons.Filled.Settings,
+        highlights = listOf(
+            "Contact Olilo support from inside the app",
+            "Report a problem using the project board link",
+            "Restart this tutorial from Settings whenever you want",
+        ),
+    ),
+)
+
+/** Displays the first-run onboarding tutorial and Settings-triggered replay flow. */
+@Composable
+private fun OnboardingScreen(
+    allowBackDismiss: Boolean,
+    onComplete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selectedPage by remember { mutableStateOf(0) }
+    val page = onboardingPages[selectedPage]
+    val isLastPage = selectedPage == onboardingPages.lastIndex
+
+    // First-run onboarding must be explicitly completed; replayed onboarding can be dismissed.
+    BackHandler(enabled = true) {
+        if (allowBackDismiss) onDismiss()
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent,
+        contentColor = Color.White,
+    ) {
+        GradientBackground {
+            Column(Modifier.fillMaxSize()) {
+                OliloTopBar(title = "Welcome")
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(28.dp),
+                ) {
+                    Icon(
+                        page.icon,
+                        contentDescription = null,
+                        tint = oliloPurple,
+                        modifier = Modifier.size(72.dp),
+                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            page.title,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            page.message,
+                            color = Color(0xFFCEC1D8),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                    StatusCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            page.highlights.forEach { highlight ->
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = oliloPurple,
+                                        modifier = Modifier
+                                            .padding(top = 2.dp)
+                                            .size(20.dp),
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        highlight,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    OnboardingPageIndicator(selectedPage = selectedPage, pageCount = onboardingPages.size)
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Button(
+                        onClick = {
+                            // The primary button pages forward until the final page marks onboarding complete.
+                            if (isLastPage) {
+                                onComplete()
+                            } else {
+                                selectedPage += 1
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (isLastPage) "Start Using Olilo Status" else "Continue")
+                    }
+                    if (!isLastPage) {
+                        TextButton(onClick = onComplete) {
+                            Text("Skip Tutorial", color = Color(0xFFCEC1D8))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Shows compact progress dots for onboarding pages. */
+@Composable
+private fun OnboardingPageIndicator(selectedPage: Int, pageCount: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(pageCount) { index ->
+            Box(
+                modifier = Modifier
+                    .size(if (index == selectedPage) 10.dp else 8.dp)
+                    .clip(CircleShape)
+                    .background(if (index == selectedPage) oliloPurple else Color(0x66CEC1D8)),
+            )
+        }
+    }
 }
 
 /** Applies the dark Olilo Material theme to app content. */
@@ -858,9 +1080,9 @@ private fun OverviewCard(
     }
 }
 
-// STATUS ICON ANIMATION
-// Animated status severity icon, doesn't match the iOS implementaion exactly due to android's
-// difference of accessibilty settings. Will be enabled regardless of settings.
+/** STATUS ICON ANIMATION
+Animated status severity icon, doesn't match the iOS implementaion exactly due to android's
+difference of accessibilty settings. Will be enabled regardless of settings. */
 
 /** Displays the animated status icon used by the overview card. */
 @Composable
@@ -1260,9 +1482,9 @@ private fun DetailRows(rows: List<Pair<String, String?>>) {
     }
 }
 
-/** Renders the settings tab and its navigation sections. */
+/** Renders the settings tab, including the action that reopens onboarding from the app shell. */
 @Composable
-private fun SettingsScreen(navController: NavHostController) {
+private fun SettingsScreen(navController: NavHostController, onStartOnboarding: () -> Unit) {
     val context = LocalContext.current
 
     Column(Modifier.fillMaxSize()) {
@@ -1286,7 +1508,12 @@ private fun SettingsScreen(navController: NavHostController) {
                         "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
                         Icons.Filled.ReportProblem,
                         navController,
+                    )
+                    SettingsNavRow(
+                        "Start Onboarding",
+                        Icons.Filled.Info,
                         showDivider = false,
+                        onClick = onStartOnboarding,
                     )
                 }
             }

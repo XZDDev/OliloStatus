@@ -27,6 +27,8 @@ final class AppRouter: ObservableObject {
 
 struct ContentView: View {
     @StateObject private var router = AppRouter.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var isOnboardingPresented = false
 
     var body: some View {
         TabView(selection: $router.selectedTab) {
@@ -42,15 +44,29 @@ struct ContentView: View {
                 }
                 .tag(AppTab.notices)
 
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape")
-                }
-                .tag(AppTab.settings)
+            SettingsView {
+                isOnboardingPresented = true
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .tag(AppTab.settings)
         }
         .tint(Color.oliloPurple)
         .preferredColorScheme(.dark)
         .background(OliloDarkGradientBackground())
+        .onAppear {
+            if !hasCompletedOnboarding {
+                isOnboardingPresented = true
+            }
+        }
+        .sheet(isPresented: $isOnboardingPresented) {
+            OnboardingView {
+                hasCompletedOnboarding = true
+                isOnboardingPresented = false
+            }
+            .interactiveDismissDisabled(!hasCompletedOnboarding)
+        }
     }
 }
 
