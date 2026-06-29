@@ -222,6 +222,7 @@ private fun OliloApp(launchRequest: LaunchRequest) {
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = Color.White,
+            contentWindowInsets = WindowInsets(0.dp),
             bottomBar = {
                 if (Route.entries.any { it.path == currentRoute }) {
                     NavigationBar(containerColor = Color(0xF20B0612)) {
@@ -523,7 +524,7 @@ private fun OliloTopBar(
     val density = LocalDensity.current
     val statusBarTopPadding = with(density) {
         WindowInsets.statusBars.getTop(this).toDp()
-    }.coerceAtMost(32.dp)
+    }
     val toolbarContentHeight = 48.dp
 
     Box(
