@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -106,6 +105,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -520,11 +520,17 @@ private fun OliloTopBar(
     onConfigure: (() -> Unit)? = null,
     navController: NavHostController? = null,
 ) {
+    val density = LocalDensity.current
+    val statusBarTopPadding = with(density) {
+        WindowInsets.statusBars.getTop(this).toDp()
+    }.coerceAtMost(32.dp)
+    val toolbarContentHeight = 48.dp
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .height(48.dp),
+            .height(statusBarTopPadding + toolbarContentHeight)
+            .padding(top = statusBarTopPadding),
     ) {
         if (navController != null) {
             IconButton(
