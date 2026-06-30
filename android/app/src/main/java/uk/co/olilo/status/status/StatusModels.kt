@@ -69,7 +69,6 @@ data class StatusComponentGroup(
     val children: List<StatusComponent>,
 ) {
     val allComponents: List<StatusComponent> = if (parent != null) listOf(parent) + children else children
-    val worstStatus: String = allComponents.maxByOrNull { statusSeverity(it.status) }?.status ?: "UNKNOWN"
 }
 
 data class StatusNotice(

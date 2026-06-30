@@ -1,6 +1,7 @@
 package uk.co.olilo.status.main
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -93,6 +94,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -152,6 +154,8 @@ import uk.co.olilo.status.status.oliloPurple
 import uk.co.olilo.status.status.readableStatus
 import uk.co.olilo.status.status.statusColor
 import uk.co.olilo.status.status.statusSeverity
+import androidx.core.content.edit
+import androidx.core.net.toUri
 
 class MainActivity : ComponentActivity() {
     private var launchRequest by mutableStateOf(LaunchRequest(Route.Status.path, 0))
@@ -301,9 +305,9 @@ private fun loadHasCompletedOnboarding(context: Context): Boolean =
 /** Persists whether the first-run onboarding tutorial has been completed. */
 private fun saveHasCompletedOnboarding(context: Context, hasCompleted: Boolean) {
     context.getSharedPreferences(ONBOARDING_PREFERENCES_NAME, Context.MODE_PRIVATE)
-        .edit()
-        .putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
-        .apply()
+        .edit {
+            putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
+        }
 }
 
 /** Describes one onboarding step and the short checklist shown on that page. */
@@ -365,7 +369,7 @@ private fun OnboardingScreen(
     onComplete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selectedPage by remember { mutableStateOf(0) }
+    var selectedPage by remember { mutableIntStateOf(0) }
     val page = onboardingPages[selectedPage]
     val isLastPage = selectedPage == onboardingPages.lastIndex
 
@@ -735,10 +739,13 @@ private fun loadComponentDisplayPreferences(context: Context): ComponentDisplayP
 /** Persists status component visibility and ordering preferences. */
 private fun saveComponentDisplayPreferences(context: Context, preferences: ComponentDisplayPreferences) {
     context.getSharedPreferences(COMPONENT_PREFERENCES_NAME, Context.MODE_PRIVATE)
-        .edit()
-        .putStringSet(HIDDEN_COMPONENT_IDS_KEY, preferences.hiddenComponentIds.toMutableSet())
-        .putString(ORDERED_COMPONENT_IDS_KEY, preferences.orderedComponentIds.joinToString("|"))
-        .apply()
+        .edit {
+            putStringSet(HIDDEN_COMPONENT_IDS_KEY, preferences.hiddenComponentIds.toMutableSet())
+                .putString(
+                    ORDERED_COMPONENT_IDS_KEY,
+                    preferences.orderedComponentIds.joinToString("|")
+                )
+        }
 }
 
 /** Returns affected components after applying display preferences. */
@@ -1838,7 +1845,7 @@ private fun SettingsExternalRow(
         title = title,
         icon = icon,
         onClick = {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         },
         logoResId = logoResId,
         showDivider = showDivider,
@@ -1945,6 +1952,7 @@ private fun SettingsRow(
 }
 
 /** Displays an in-app WebView page with a top bar. */
+@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun WebPage(navController: NavHostController, title: String, url: String) {
     Column(Modifier.fillMaxSize()) {

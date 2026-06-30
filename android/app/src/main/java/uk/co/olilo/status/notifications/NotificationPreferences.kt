@@ -3,6 +3,7 @@ package uk.co.olilo.status.notifications
 import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import androidx.core.content.edit
 
 /** Mirrors the backend's per-device preference shape. */
 @Serializable
@@ -32,7 +33,7 @@ object NotificationStore {
 
     /** Persists the current notification preferences. */
     fun savePreferences(context: Context, preferences: NotificationPreferences) {
-        prefs(context).edit().putString(KEY_PREFERENCES, json.encodeToString(preferences)).apply()
+        prefs(context).edit { putString(KEY_PREFERENCES, json.encodeToString(preferences)) }
     }
 
     /** Returns whether the user has opted into notifications in-app. */
@@ -40,7 +41,7 @@ object NotificationStore {
 
     /** Persists the notification opt-in flag. */
     fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs(context).edit { putBoolean(KEY_ENABLED, enabled) }
     }
 
     /** Loads the last registered FCM token, if available. */
@@ -48,7 +49,7 @@ object NotificationStore {
 
     /** Persists the latest FCM token. */
     fun saveToken(context: Context, token: String) {
-        prefs(context).edit().putString(KEY_TOKEN, token).apply()
+        prefs(context).edit { putString(KEY_TOKEN, token) }
     }
 
     /** Opens the shared preferences file used by notification storage. */

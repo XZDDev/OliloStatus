@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "uk.co.olilo.status"
-        minSdk = 35
+        minSdk = 33
         targetSdk = 37
         // Google Play requires a unique, ever-increasing versionCode per upload.
         // CI sets ANDROID_VERSION_CODE (the GitLab pipeline IID); local builds
@@ -60,9 +60,9 @@ android {
 // Gradle Play Publisher. Service-account JSON resolves from, in order:
 //   1. PLAY_SERVICE_ACCOUNT_JSON env var (set by CI) - a path to the JSON.
 //   2. app/play-service-account.json - a local, git-ignored file you drop in.
-// If neither exists the publish tasks have no credentials (local builds that
+// If neither exists the publishing tasks have no credentials (local builds that
 // only assemble/bundle still work fine).
-val playCredentials: java.io.File? =
+val playCredentials: File? =
     System.getenv("PLAY_SERVICE_ACCOUNT_JSON")?.let { file(it) }
         ?: layout.projectDirectory.file("play-service-account.json").asFile.takeIf { it.exists() }
 
@@ -75,8 +75,8 @@ play {
 }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2026.05.01"))
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.00"))
+    implementation(platform("com.google.firebase:firebase-bom:34.15.0"))
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.fragment:fragment:1.8.9")
@@ -84,8 +84,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("com.google.firebase:firebase-messaging")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")

@@ -181,7 +181,7 @@ private class AtomNoticeParser {
             ?: return null
         val referenceYear = runCatching { OffsetDateTime.parse(referenceDate).year }
             .getOrDefault(OffsetDateTime.now(ZoneOffset.UTC).year)
-        val month = Month.values().firstOrNull {
+        val month = Month.entries.firstOrNull {
             it.getDisplayName(java.time.format.TextStyle.SHORT, Locale.US).equals(match.groupValues[1], ignoreCase = true)
         } ?: return null
         val offset = ZoneOffset.ofHours(match.groupValues[6].toInt())

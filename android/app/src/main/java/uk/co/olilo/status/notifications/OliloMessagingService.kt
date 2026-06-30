@@ -25,6 +25,7 @@ class OliloMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Re-registers the rotated FCM token with the backend. */
+    @Deprecated("Deprecated in Java")
     override fun onNewToken(token: String) {
         // Re-register so the backend always has the device's current token.
         scope.launch { OliloNotifications.register(applicationContext, token) }
