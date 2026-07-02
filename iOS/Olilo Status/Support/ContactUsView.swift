@@ -6,42 +6,45 @@ struct ContactUsView: View {
             OliloDarkGradientBackground()
 
             Form {
-            Section {
-                Link(destination: URL(string: "https://discord.gg/olilo")!) {
-                    ContactAssetRowLabel(title: "Find us on Discord", imageName: "Discord")
+                Section {
+                    Link(destination: URL(string: "https://discord.gg/olilo")!) {
+                        ContactAssetRowLabel(title: "Find us on Discord", imageName: "Discord")
+                    }
+
+                    Link(destination: URL(string: "https://www.reddit.com/r/Olilo")!) {
+                        ContactAssetRowLabel(title: "Find us on Reddit", imageName: "Reddit")
+                    }
+                } header: {
+                    Text("Social")
+                } footer: {
+                    Text("Support links will open to external sites.")
                 }
 
-                Link(destination: URL(string: "https://www.reddit.com/r/Olilo")!) {
-                    ContactAssetRowLabel(title: "Find us on Reddit", imageName: "Reddit")
-                }
-            } header: {
-                Text("Social")
-            } footer: {
-                Text("Support links will open to external sites.")
-            }
+                Section {
+                    Link(destination: URL(string: "mailto:support@olilo.co.uk")!) {
+                        ContactSystemRowLabel(title: "Olilo Support", systemImage: "envelope")
+                    }
 
-            Section {
-                Link(destination: URL(string: "mailto:support@olilo.co.uk")!) {
-                    ContactSystemRowLabel(title: "Olilo Support", systemImage: "envelope")
+                    Link(destination: URL(string: "mailto:sales@olilo.co.uk")!) {
+                        ContactSystemRowLabel(title: "Olilo Sales", systemImage: "envelope")
+                    }
+                } header: {
+                    Text("Email")
+                } footer: {
+                    Text("Please provide as much useful information as possible.")
                 }
 
-                Link(destination: URL(string: "mailto:sales@olilo.co.uk")!) {
-                    ContactSystemRowLabel(title: "Olilo Sales", systemImage: "envelope")
+                Section {
+                    OliloFooterLogo()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .listRowSeparator(.hidden)
                 }
-            } header: {
-                Text("Email")
-            } footer: {
-                Text("Please provide as much useful information as possible.")
-            }
-
-            OliloFooterLogo()
-                .frame(maxWidth: .infinity)
-                .listRowInsets(EdgeInsets(top: 24, leading: 0, bottom: 24, trailing: 0))
-                .listRowBackground(Color.clear)
             }
             .scrollContentBackground(.hidden)
             .iPadReadableContent()
         }
+        .tint(Color.oliloPurple)
         .navigationTitle("Contact Us")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -67,6 +70,7 @@ private struct ContactAssetRowLabel: View {
         }
     }
 }
+
 private struct ContactSystemRowLabel: View {
     let title: String
     let systemImage: String
@@ -82,4 +86,3 @@ private struct ContactSystemRowLabel: View {
         }
     }
 }
-

@@ -24,54 +24,54 @@ struct NotificationSettingsView: View {
             OliloDarkGradientBackground()
 
             Form {
-            Section {
-                Toggle(isOn: enabledBinding) {
-                    notificationToggleLabel("Enable notifications")
-                }
-            } header: {
-                Text("Notifications")
-            } footer: {
-                Text("Get notified about Olilo Network updates on this device.")
-            }
-
-            if manager.isEnabled {
                 Section {
-                    Toggle(isOn: prefBinding(\.incidents)) {
-                        notificationToggleLabel("Incidents")
-                    }
-                    Toggle(isOn: prefBinding(\.maintenance)) {
-                        notificationToggleLabel("Scheduled maintenance")
-                    }
-                    Toggle(isOn: prefBinding(\.componentAlerts)) {
-                        notificationToggleLabel("Component status changes")
+                    Toggle(isOn: enabledBinding) {
+                        notificationToggleLabel("Enable notifications")
                     }
                 } header: {
-                    Text("Notify me about")
-                        .foregroundStyle(Color.secondary)
+                    Text("Notifications")
                 } footer: {
-                    Text("Choose which notices you get notified about.")
+                    Text("Get notified about Olilo Network updates on this device.")
                 }
 
-                if hasEnabledNotificationType {
+                if manager.isEnabled {
                     Section {
-                        ForEach(networks, id: \.self) { network in
-                            Toggle(isOn: networkBinding(network)) {
-                                notificationToggleLabel(network)
-                            }
+                        Toggle(isOn: prefBinding(\.incidents)) {
+                            notificationToggleLabel("Incidents")
+                        }
+                        Toggle(isOn: prefBinding(\.maintenance)) {
+                            notificationToggleLabel("Scheduled maintenance")
+                        }
+                        Toggle(isOn: prefBinding(\.componentAlerts)) {
+                            notificationToggleLabel("Component status changes")
                         }
                     } header: {
-                        Text("Networks")
-                            .foregroundStyle(Color.secondary)
+                        Text("Notify Me About")
                     } footer: {
-                        Text("Choose which networks you get notified about. With none selected you'll get alerts for all networks.")
+                        Text("Choose which notices you get notified about.")
+                    }
+
+                    if hasEnabledNotificationType {
+                        Section {
+                            ForEach(networks, id: \.self) { network in
+                                Toggle(isOn: networkBinding(network)) {
+                                    notificationToggleLabel(network)
+                                }
+                            }
+                        } header: {
+                            Text("Networks")
+                        } footer: {
+                            Text("Choose which networks you get notified about. With none selected you'll get alerts for all networks.")
+                        }
                     }
                 }
-            }
 
-            OliloFooterLogo()
-                .frame(maxWidth: .infinity)
-                .listRowInsets(EdgeInsets(top: 24, leading: 0, bottom: 24, trailing: 0))
-                .listRowBackground(Color.clear)
+                Section {
+                    OliloFooterLogo()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .listRowSeparator(.hidden)
+                }
             }
             .scrollContentBackground(.hidden)
             .iPadReadableContent()
