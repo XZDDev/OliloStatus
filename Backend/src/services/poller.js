@@ -52,16 +52,32 @@ function affectedNames(item) {
   return [...names];
 }
 
-function normalizeIncident(item, kind) {
+// The public summary endpoints don't attach components to incidents, so most
+// incidents arrive with no affected list at all - which the notifier treats as
+// global and sends to every device regardless of network filter. Recover the
+// networks by matching known component/group names against the incident title
+// (e.g. "CityFibre Outage | Crawley" -> ["CityFibre"]). Boundary-checked so a
+// short name can't match inside a longer word.
+function inferAffectedFromTitle(title, knownNames) {
+  if (!title) return [];
+  return knownNames.filter((name) => {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(title);
+  });
+}
+
+function normalizeIncident(item, kind, knownNames) {
   const status = String(item.status ?? 'INVESTIGATING').toUpperCase();
+  const name = item.name ?? (kind === 'maintenance' ? 'Scheduled maintenance' : 'Incident');
+  const affected = affectedNames(item);
   return {
     externalId: String(item.id),
     kind,
-    name: item.name ?? (kind === 'maintenance' ? 'Scheduled maintenance' : 'Incident'),
+    name,
     status,
     impact: item.impact ?? null,
     url: item.url ?? null,
-    affected: affectedNames(item),
+    affected: affected.length ? affected : inferAffectedFromTitle(name, knownNames),
     startedAt: item.started ?? item.start ?? item.startedAt ?? null,
     notifiedHash: hash(status),
   };
@@ -69,11 +85,11 @@ function normalizeIncident(item, kind) {
 
 // Reconcile active incidents/maintenances from the summary against stored
 // state, notifying on new items, status changes and resolutions.
-async function reconcileIncidents(summary, coldStart) {
+async function reconcileIncidents(summary, coldStart, knownNames) {
   const stored = await incidentsRepo.getAll();
   const active = [
-    ...summary.activeIncidents.map((i) => normalizeIncident(i, 'incident')),
-    ...summary.activeMaintenances.map((m) => normalizeIncident(m, 'maintenance')),
+    ...summary.activeIncidents.map((i) => normalizeIncident(i, 'incident', knownNames)),
+    ...summary.activeMaintenances.map((m) => normalizeIncident(m, 'maintenance', knownNames)),
   ];
   const activeIds = new Set(active.map((i) => i.externalId));
 
@@ -161,7 +177,13 @@ export async function pollOnce() {
   const coldStartIncidents = storedIncidents.size === 0;
   const coldStartComponents = storedComponents.size === 0;
 
-  await reconcileIncidents(summary, coldStartIncidents);
+  // Component and group names double as the vocabulary for inferring which
+  // networks an incident affects from its title.
+  const knownNames = [
+    ...new Set(components.flatMap((c) => [c.name, c.group?.name].filter(Boolean))),
+  ];
+
+  await reconcileIncidents(summary, coldStartIncidents, knownNames);
   await reconcileComponents(components, coldStartComponents);
 }
 
