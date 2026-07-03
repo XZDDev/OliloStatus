@@ -1049,24 +1049,16 @@ private struct StatusCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(20)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(.white.opacity(0.25), lineWidth: 1)
-                            .blur(radius: 2)
-                            .offset(x: -1, y: -1)
-                            .mask(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(LinearGradient(colors: [.white, .clear], startPoint: .topLeading, endPoint: .bottomTrailing)))
-                    }
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(.white.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.25), radius: 15, x: 0, y: 8)
     }
 }
 

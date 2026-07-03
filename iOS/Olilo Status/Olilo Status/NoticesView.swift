@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import UIKit
 
 struct StatusNotice: Identifiable {
     enum NoticeKind: String, CaseIterable, Identifiable {
@@ -457,17 +458,16 @@ private struct NoticeCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(20)
+            .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(.white.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.18), radius: 12, x: 0, y: 6)
     }
 }
 

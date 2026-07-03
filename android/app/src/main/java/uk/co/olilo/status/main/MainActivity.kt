@@ -257,13 +257,7 @@ private fun OliloApp(launchRequest: LaunchRequest) {
             ) {
                 composable(Route.Status.path) { StatusScreen(navController) }
                 composable(Route.Notices.path) { NoticesScreen(navController) }
-                composable(Route.Settings.path) {
-                    SettingsScreen(
-                        navController = navController,
-                        // Replays the tutorial without clearing the completed flag.
-                        onStartOnboarding = { showOnboarding = true },
-                    )
-                }
+                composable(Route.Settings.path) { SettingsScreen(navController) }
                 composable("notification-settings") { NotificationSettingsScreen(navController) }
                 composable("credits") { CreditsPage(navController) }
                 composable("contact") { ContactUsPage(navController) }
@@ -1554,9 +1548,9 @@ private fun DetailRows(rows: List<Pair<String, String?>>) {
     }
 }
 
-/** Renders the settings tab, including the action that reopens onboarding from the app shell. */
+/** Renders the settings tab. */
 @Composable
-private fun SettingsScreen(navController: NavHostController, onStartOnboarding: () -> Unit) {
+private fun SettingsScreen(navController: NavHostController) {
     val context = LocalContext.current
 
     Column(Modifier.fillMaxSize()) {
@@ -1580,12 +1574,7 @@ private fun SettingsScreen(navController: NavHostController, onStartOnboarding: 
                         "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
                         Icons.Filled.ReportProblem,
                         navController,
-                    )
-                    SettingsNavRow(
-                        "Start Onboarding",
-                        Icons.Filled.Info,
                         showDivider = false,
-                        onClick = onStartOnboarding,
                     )
                 }
             }

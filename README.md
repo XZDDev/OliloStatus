@@ -11,7 +11,6 @@ Olilo Status the open source status app for the Olilo ISP in the UK & Ireland. I
   <img src="App%20Store/olilo-ios-2.png" width="180" alt="Olilo Status iOS screenshot 2">
   <img src="App%20Store/olilo-ios-3.png" width="180" alt="Olilo Status iOS screenshot 3">
   <img src="App%20Store/olilo-ios-4.png" width="180" alt="Olilo Status iOS screenshot 4">
-  <img src="App%20Store/olilo-ios-5.png" width="180" alt="Olilo Status iOS screenshot 5">
 </p>
 
 ### Android
@@ -21,7 +20,6 @@ Olilo Status the open source status app for the Olilo ISP in the UK & Ireland. I
   <img src="Play%20Store/olilo-android-2.png" width="180" alt="Olilo Status Android screenshot 2">
   <img src="Play%20Store/olilo-android-3.png" width="180" alt="Olilo Status Android screenshot 3">
   <img src="Play%20Store/olilo-android-4.png" width="180" alt="Olilo Status Android screenshot 4">
-  <img src="Play%20Store/olilo-android-5.png" width="180" alt="Olilo Status Android screenshot 5">
 </p>
 
 ## Features
