@@ -276,6 +276,12 @@ final class StatusViewModel: ObservableObject {
             }
     }
 
+    /// Returns the highest-severity status among components still shown by the user.
+    func visibleStatus(using preferences: StatusComponentDisplayPreferences) -> String {
+        let visibleComponents = components.filter { !preferences.hiddenComponentIDs.contains($0.id) }
+        return visibleComponents.map(\.status).sorted(by: statusSeveritySort).last ?? "OPERATIONAL"
+    }
+
     /// Returns active incidents that still apply to the user's visible component configuration.
     func visibleIncidents(using preferences: StatusComponentDisplayPreferences) -> [Incident] {
         let visibleComponents = components.filter { !preferences.hiddenComponentIDs.contains($0.id) }
@@ -360,12 +366,14 @@ struct StatusView: View {
                     let visibleAffectedComponents = model.visibleAffectedComponents(using: componentDisplayPreferences)
                     let visibleIncidents = model.visibleIncidents(using: componentDisplayPreferences)
                     let visibleComponentCount = visibleComponentGroups.reduce(0) { $0 + $1.allComponents.count }
+                    let visibleStatus = model.visibleStatus(using: componentDisplayPreferences)
 
                     ScrollView {
                         LazyVStack(spacing: 18) {
                             if let summary = model.summary {
                                 OverviewCard(
                                     summary: summary,
+                                    displayStatus: visibleStatus,
                                     componentCount: visibleComponentCount,
                                     affectedCount: visibleAffectedComponents.count,
                                     incidentCount: visibleIncidents.count,
@@ -711,6 +719,7 @@ private struct StatusSectionHeader: View {
 
 private struct OverviewCard: View {
     let summary: StatusPageSummary
+    let displayStatus: String
     let componentCount: Int
     let affectedCount: Int
     let incidentCount: Int
@@ -723,11 +732,11 @@ private struct OverviewCard: View {
         StatusCard {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top, spacing: 14) {
-                    PulsingStatusIcon(status: summary.page.status)
+                    PulsingStatusIcon(status: displayStatus)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Olilo Network Status")
                             .font(.title2.weight(.bold))
-                        Text(statusSeverity(summary.page.status) == 0 ? "All systems operational" : readableStatus(summary.page.status))
+                        Text(statusSeverity(displayStatus) == 0 ? "All systems operational" : readableStatus(displayStatus))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }

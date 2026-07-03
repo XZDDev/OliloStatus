@@ -752,6 +752,15 @@ private fun visibleAffectedComponents(
         component.id !in preferences.hiddenComponentIds
     }
 
+/** Returns the highest-severity status among components still shown by the user. */
+private fun visibleStatus(
+    components: List<StatusComponent>,
+    preferences: ComponentDisplayPreferences,
+): String = components
+    .filterNot { it.id in preferences.hiddenComponentIds }
+    .maxByOrNull { statusSeverity(it.status) }
+    ?.status ?: "OPERATIONAL"
+
 /** Returns active incidents after applying display preferences to clearly referenced components. */
 private fun visibleIncidents(
     incidents: List<Incident>,
@@ -820,6 +829,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
         val visibleAffected = visibleAffectedComponents(state.components, displayPreferences)
         val visibleIncidents = visibleIncidents(state.incidents, state.components, displayPreferences)
         val visibleComponentCount = visibleComponentGroups.sumOf { it.allComponents.size }
+        val visibleStatus = visibleStatus(state.components, displayPreferences)
 
         if (showComponentEditor) {
             ComponentDisplayEditorDialog(
@@ -839,6 +849,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                     OverviewCard(
                         summary = summary,
                         state = state,
+                        displayStatus = visibleStatus,
                         componentCount = visibleComponentCount,
                         affectedCount = visibleAffected.size,
                         incidentCount = visibleIncidents.size,
@@ -1086,6 +1097,7 @@ private fun ComponentCategoryCard(components: List<StatusComponent>) {
 private fun OverviewCard(
     summary: StatusPageSummary,
     state: StatusScreenState,
+    displayStatus: String,
     componentCount: Int,
     affectedCount: Int,
     incidentCount: Int,
@@ -1094,13 +1106,13 @@ private fun OverviewCard(
     StatusCard {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                PulsingStatusIcon(summary.page.status)
+                PulsingStatusIcon(displayStatus)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text("Olilo Network Status", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(
-                        if (statusSeverity(summary.page.status) == 0) "All systems operational" else readableStatus(
-                            summary.page.status
+                        if (statusSeverity(displayStatus) == 0) "All systems operational" else readableStatus(
+                            displayStatus
                         ),
                         color = Color(0xFFCEC1D8),
                     )
