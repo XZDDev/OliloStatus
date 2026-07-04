@@ -327,11 +327,12 @@ private struct StatusWebDestination: Identifiable {
 struct StatusView: View {
     @StateObject private var model = StatusViewModel()
     @State private var presentedWebDestination: StatusWebDestination?
+    @State private var isDashboardPresented = false
     @State private var isComponentEditorPresented = false
     @State private var componentDisplayPreferences = StatusComponentDisplayPreferences.load()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let dashboardURL = URL(string: "https://stats.olilo.co.uk/")
+    private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-public-status?orgId=2&from=now-24h&to=now&timezone=browser&refresh=1m&kiosk=1")
     private let portalURL = URL(string: "https://billing.olilo.co.uk")
     private let terminalURL = URL(string: "https://terminal.olilo.co.uk")
     private let wikiURL = URL(string: "https://olilo.co.uk/wiki")
@@ -386,7 +387,7 @@ struct StatusView: View {
                                     usesIPadLayout: usesIPadLayout,
                                     isTerminalEnabled: terminalURL != nil,
                                     isWikiEnabled: wikiURL != nil,
-                                    dashboardAction: { presentWebDestination(title: "Dashboard", url: dashboardURL) },
+                                    dashboardAction: { isDashboardPresented = true },
                                     portalAction: { presentWebDestination(title: "Portal", url: portalURL) },
                                     terminalAction: { presentWebDestination(title: "Terminal", url: terminalURL) },
                                     wikiAction: { presentWebDestination(title: "Wiki", url: wikiURL) }
@@ -486,6 +487,13 @@ struct StatusView: View {
                     groups: model.componentGroups,
                     preferences: $componentDisplayPreferences
                 )
+            }
+            .sheet(isPresented: $isDashboardPresented) {
+                if let dashboardURL {
+                    OliloIframeWebViewSheet(title: "Dashboard", url: dashboardURL)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
             }
         }
     }

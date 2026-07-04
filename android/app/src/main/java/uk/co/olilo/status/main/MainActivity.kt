@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.webkit.CookieManager
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -268,6 +270,13 @@ private fun OliloApp(launchRequest: LaunchRequest) {
                         url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
                     )
                 }
+                composable("iframe/{title}/{url}") { entry ->
+                    IframePage(
+                        navController = navController,
+                        title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
+                        url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+                    )
+                }
             }
         }
 
@@ -285,6 +294,10 @@ private fun OliloApp(launchRequest: LaunchRequest) {
 /** Navigates to the in-app WebView route with URL-safe arguments. */
 private fun NavHostController.openWeb(title: String, url: String) {
     navigate("web/${Uri.encode(title)}/${Uri.encode(url)}")
+}
+
+private fun NavHostController.openIframe(title: String, url: String) {
+    navigate("iframe/${Uri.encode(title)}/${Uri.encode(url)}")
 }
 
 // Stored separately from component preferences so onboarding can be reset independently if needed.
@@ -907,9 +920,9 @@ private fun StatusLinksCard(navController: NavHostController) {
                     icon = Icons.Filled.Dashboard,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        navController.openWeb(
+                        navController.openIframe(
                             "Dashboard",
-                            "https://stats.olilo.co.uk/",
+                            "https://dashboard.as212683.net/d/olilo-public-status/overview?orgId=2&from=now-24h&to=now&timezone=browser&refresh=1m&kiosk=1",
                         )
                     },
                 )
@@ -2003,12 +2016,94 @@ private fun WebPage(navController: NavHostController, title: String, url: String
             },
             update = {},
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f)
                 .semantics {
                     contentDescription = "$title web content"
                 },
         )
     }
+}
+
+/** Displays an in-app iframe page with a top bar. */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun IframePage(navController: NavHostController, title: String, url: String) {
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = title, navController = navController)
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    webViewClient = dashboardWebViewClient()
+                    settings.javaScriptEnabled = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.domStorageEnabled = true
+                    settings.databaseEnabled = true
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.userAgentString = desktopChromeUserAgent
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    loadUrl(url)
+                }
+            },
+            update = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .semantics {
+                    contentDescription = "$title dashboard content"
+                },
+        )
+    }
+}
+
+private const val desktopChromeUserAgent =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
+private fun dashboardWebViewClient(): WebViewClient = object : WebViewClient() {
+    override fun onPageFinished(view: WebView?, url: String?) {
+        view?.evaluateJavascript(dashboardViewportFixScript(view.height), null)
+    }
+}
+
+private fun dashboardViewportFixScript(viewportHeight: Int): String {
+    val height = viewportHeight.coerceAtLeast(800)
+    return """
+        (() => {
+            const height = '${height}px';
+            const styleId = 'olilo-dashboard-viewport-fix';
+            let style = document.getElementById(styleId);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = styleId;
+                document.head.appendChild(style);
+            }
+            style.textContent = `
+                html,
+                body,
+                #reactRoot,
+                .main-view,
+                .grafana-app,
+                [data-testid="dashboard-container"] {
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    min-height: ${'$'}{height} !important;
+                    height: ${'$'}{height} !important;
+                }
+            `;
+            [document.documentElement, document.body, document.getElementById('reactRoot')]
+                .filter(Boolean)
+                .forEach((element) => {
+                    element.style.setProperty('width', '100%', 'important');
+                    element.style.setProperty('min-height', height, 'important');
+                    element.style.setProperty('height', height, 'important');
+                });
+        })()
+    """.trimIndent()
 }
 
 /** Renders the contact page with social and email links. */
