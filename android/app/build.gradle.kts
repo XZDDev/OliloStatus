@@ -25,7 +25,7 @@ android {
         // CI sets ANDROID_VERSION_CODE (the GitLab pipeline IID); local builds
         // fall back to 1.
         versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInt()
-        versionName = "1.0.2"
+        versionName = "1.0.3"
     }
 
     signingConfigs {

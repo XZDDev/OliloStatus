@@ -909,7 +909,7 @@ private fun StatusLinksCard(navController: NavHostController) {
                     onClick = {
                         navController.openWeb(
                             "Dashboard",
-                            "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser",
+                            "https://stats.olilo.co.uk/",
                         )
                     },
                 )

@@ -331,7 +331,7 @@ struct StatusView: View {
     @State private var componentDisplayPreferences = StatusComponentDisplayPreferences.load()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-traffic-analytics-001/traffic-analytics?orgId=2&from=now-1h&to=now&timezone=browser")
+    private let dashboardURL = URL(string: "https://stats.olilo.co.uk/")
     private let portalURL = URL(string: "https://billing.olilo.co.uk")
     private let terminalURL = URL(string: "https://terminal.olilo.co.uk")
     private let wikiURL = URL(string: "https://olilo.co.uk/wiki")
