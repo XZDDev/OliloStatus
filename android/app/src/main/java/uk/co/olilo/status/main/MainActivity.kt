@@ -91,6 +91,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -257,6 +258,7 @@ private fun OliloApp(
             contentWindowInsets = WindowInsets(0.dp),
             bottomBar = {
                 if (Route.entries.any { it.path == currentRoute }) {
+                    val theme = LocalOliloTheme.current
                     NavigationBar(containerColor = themedNavigationBarColor()) {
                         Route.entries.forEach { route ->
                             NavigationBarItem(
@@ -269,6 +271,13 @@ private fun OliloApp(
                                 },
                                 icon = { Icon(route.icon, contentDescription = route.label) },
                                 label = { Text(route.label) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = theme.accentColor,
+                                    selectedTextColor = theme.accentColor,
+                                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
+                                    unselectedIconColor = Color(0xFFE2D8EA),
+                                    unselectedTextColor = Color(0xFFE2D8EA),
+                                ),
                             )
                         }
                     }
