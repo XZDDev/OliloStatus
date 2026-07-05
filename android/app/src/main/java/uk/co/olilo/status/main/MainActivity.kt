@@ -2146,7 +2146,12 @@ private fun IframePage(navController: NavHostController, title: String, url: Str
                     settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
                     settings.userAgentString = desktopChromeUserAgent
+                    isHorizontalScrollBarEnabled = true
+                    isVerticalScrollBarEnabled = true
+                    overScrollMode = WebView.OVER_SCROLL_ALWAYS
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     loadUrl(url)
@@ -2191,16 +2196,19 @@ private fun dashboardViewportFixScript(viewportHeight: Int): String {
                 .main-view,
                 .grafana-app,
                 [data-testid="dashboard-container"] {
-                    width: 100% !important;
-                    min-width: 100% !important;
+                    width: max-content !important;
+                    min-width: 1200px !important;
                     min-height: ${'$'}{height} !important;
                     height: ${'$'}{height} !important;
+                    overflow: auto !important;
                 }
             `;
             [document.documentElement, document.body, document.getElementById('reactRoot')]
                 .filter(Boolean)
                 .forEach((element) => {
-                    element.style.setProperty('width', '100%', 'important');
+                    element.style.setProperty('width', 'max-content', 'important');
+                    element.style.setProperty('min-width', '1200px', 'important');
+                    element.style.setProperty('overflow', 'auto', 'important');
                     element.style.setProperty('min-height', height, 'important');
                     element.style.setProperty('height', height, 'important');
                 });

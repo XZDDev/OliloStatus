@@ -70,6 +70,11 @@ private struct OliloIframeWebView: UIViewRepresentable {
         configuration.allowsInlineMediaPlayback = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.bouncesZoom = true
+        webView.scrollView.maximumZoomScale = 3
+        webView.scrollView.minimumZoomScale = 1
+        webView.scrollView.alwaysBounceHorizontal = true
+        webView.scrollView.alwaysBounceVertical = true
         loadIframe(in: webView)
         return webView
     }
@@ -86,21 +91,33 @@ private struct OliloIframeWebView: UIViewRepresentable {
         <!doctype html>
         <html>
         <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+            <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.25, maximum-scale=3, viewport-fit=cover">
             <style>
-                html, body, iframe {
+                html, body {
                     width: 100%;
+                    min-width: 1200px;
+                    height: 100%;
+                    margin: 0;
+                    padding: 0;
+                    background: #000;
+                    overflow: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+
+                iframe {
+                    display: block;
+                    width: 1200px;
+                    min-width: 100%;
                     height: 100%;
                     margin: 0;
                     padding: 0;
                     border: 0;
                     background: #000;
-                    overflow: hidden;
                 }
             </style>
         </head>
         <body>
-            <iframe src="\(sourceURL)" allowfullscreen loading="eager"></iframe>
+            <iframe src="\(sourceURL)" allowfullscreen loading="eager" scrolling="yes"></iframe>
         </body>
         </html>
         """
