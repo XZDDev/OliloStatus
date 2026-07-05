@@ -249,7 +249,7 @@ private fun OliloApp(
             contentWindowInsets = WindowInsets(0.dp),
             bottomBar = {
                 if (Route.entries.any { it.path == currentRoute }) {
-                    NavigationBar(containerColor = Color(0xF20B0612)) {
+                    NavigationBar(containerColor = themedNavigationBarColor()) {
                         Route.entries.forEach { route ->
                             NavigationBarItem(
                                 selected = currentRoute == route.path,
@@ -525,8 +525,8 @@ private fun OliloStatusTheme(theme: OliloTheme, content: @Composable () -> Unit)
         primary = theme.accentColor,
         secondary = Color(0xFF64B5F6),
         background = theme.backgroundColors.top,
-        surface = Color(0xD91A1025),
-        surfaceVariant = Color(0xE6261737),
+        surface = theme.backgroundColors.mid.copy(alpha = 0.85f),
+        surfaceVariant = theme.backgroundColors.mid.copy(alpha = 0.9f),
         onPrimary = Color.White,
         onSurface = Color.White,
         onSurfaceVariant = Color(0xFFE2D8EA),
@@ -560,6 +560,22 @@ private fun GradientBackground(content: @Composable () -> Unit) {
 @Composable
 private fun themedStatusColor(status: String): Color =
     statusColor(status, LocalOliloTheme.current.accentColor)
+
+@Composable
+private fun themedCardColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.7f)
+
+@Composable
+private fun themedChipColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.35f)
+
+@Composable
+private fun themedDialogColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.95f)
+
+@Composable
+private fun themedNavigationBarColor(): Color =
+    LocalOliloTheme.current.backgroundColors.top.copy(alpha = 0.95f)
 
 /** Renders the app toolbar with optional back, refresh, and configure actions. */
 @Composable
@@ -643,7 +659,7 @@ private fun OpenUrlButton(
         colors = AssistChipDefaults.assistChipColors(
             labelColor = Color.White,
             leadingIconContentColor = LocalOliloTheme.current.accentColor,
-            containerColor = Color(0x332B1C3D),
+            containerColor = themedChipColor(),
         ),
     )
 }
@@ -655,7 +671,7 @@ private fun StatusCard(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xB3261737),
+            containerColor = themedCardColor(),
             contentColor = Color.White,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -1055,7 +1071,7 @@ private fun ComponentDisplayEditorDialog(
                 Text("Show All")
             }
         },
-        containerColor = Color(0xF2261737),
+        containerColor = themedDialogColor(),
         titleContentColor = Color.White,
         textContentColor = Color.White,
     )
@@ -1242,7 +1258,7 @@ private fun MetricTile(title: String, value: String, modifier: Modifier = Modifi
                 contentDescription = "$title: $value"
             },
         shape = RoundedCornerShape(14.dp),
-        color = Color(0x592B1C3D),
+        color = themedChipColor(),
         contentColor = Color.White,
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -1410,7 +1426,7 @@ private fun NoticeFilterChip(selected: Boolean, label: String, onClick: () -> Un
         colors = FilterChipDefaults.filterChipColors(
             labelColor = Color.White,
             selectedLabelColor = Color.White,
-            containerColor = Color(0x332B1C3D),
+            containerColor = themedChipColor(),
             selectedContainerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.35f),
         ),
     )
@@ -1432,7 +1448,7 @@ private fun ExpandableDescription(text: String, collapsedLines: Int = 4) {
             label = { Text(if (expanded) "Show less" else "Show more") },
             colors = AssistChipDefaults.assistChipColors(
                 labelColor = Color.White,
-                containerColor = Color(0x332B1C3D),
+                containerColor = themedChipColor(),
             ),
         )
     }
@@ -1505,7 +1521,7 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                     label = { Text(if (descriptionExpanded) "Show less" else "Show more") },
                     colors = AssistChipDefaults.assistChipColors(
                         labelColor = Color.White,
-                        containerColor = Color(0x332B1C3D),
+                        containerColor = themedChipColor(),
                     ),
                 )
                 notice.updates.takeIf { it.isNotEmpty() }?.let { updates ->
@@ -1792,7 +1808,7 @@ private fun AppearanceSettingsScreen(
                     Text("Close App")
                 }
             },
-            containerColor = Color(0xF2261737),
+            containerColor = themedDialogColor(),
             titleContentColor = Color.White,
             textContentColor = Color.White,
         )
