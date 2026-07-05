@@ -454,9 +454,9 @@ struct StatusView: View {
                         isComponentEditorPresented = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Edit status components")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -464,10 +464,10 @@ struct StatusView: View {
                         Task { await model.refresh() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .disabled(model.isLoading)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Refresh status")
                 }
             }
@@ -546,7 +546,7 @@ private struct ComponentDisplayEditor: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .tint(Color.oliloPurple)
+                            .tint(Color.oliloTheme)
                         }
                         .onMove { source, destination in
                             preferences.moveComponents(from: source, to: destination, in: group)
@@ -561,7 +561,7 @@ private struct ComponentDisplayEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     EditButton()
-                        .tint(Color.oliloPurple)
+                        .tint(Color.oliloTheme)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
@@ -573,13 +573,13 @@ private struct ComponentDisplayEditor: View {
                         preferences.hiddenComponentIDs.removeAll()
                     }
                     .disabled(preferences.hiddenComponentIDs.isEmpty)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                 }
             }
             .scrollContentBackground(.hidden)
             .background(OliloDarkGradientBackground())
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
     }
 
     /// Creates a binding for the component visibility toggle in the editor.
@@ -610,7 +610,7 @@ private struct EmptyComponentsCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "eye.slash")
                     .font(.title2)
-                    .foregroundStyle(Color.oliloPurple)
+                    .foregroundStyle(Color.oliloTheme)
                 Text("No components shown")
                     .font(.headline)
                 Text("Use the component editor to show services on this page.")
@@ -696,7 +696,7 @@ private struct StatusLinkButton: View {
         }
         .buttonStyle(.bordered)
         .controlSize(usesIPadLayout ? .large : .regular)
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .disabled(!isEnabled)
         .accessibilityHint("Opens \(title)")
     }
@@ -763,10 +763,10 @@ private struct OverviewCard: View {
                         isStatusPagePresented = true
                     } label: {
                         Label("Olilo Status", systemImage: "gauge")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .buttonStyle(.plain)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Open Olilo Status page")
                     .accessibilityHint("Opens the public status page")
                     Spacer()
@@ -963,7 +963,7 @@ private struct ComponentGroupCard: View {
                 } label: {
                     ComponentGroupHeader(group: group)
                 }
-                .tint(Color.oliloPurple)
+                .tint(Color.oliloTheme)
             } else {
                 ComponentGroupHeader(group: group)
             }
@@ -1192,7 +1192,7 @@ func statusSeveritySort(_ lhs: String, _ rhs: String) -> Bool {
 func statusColor(_ status: String) -> Color {
     switch status.uppercased() {
     case "UP", "OPERATIONAL", "RESOLVED", "COMPLETED":
-        return .oliloPurple
+        return .oliloTheme
     case "UNDERMAINTENANCE", "MONITORING", "NOTSTARTEDYET":
         return .blue
     case "HASISSUES", "HAS_ISSUES", "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":

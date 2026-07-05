@@ -17,7 +17,7 @@ struct OliloWebViewSheet: View {
                         Button("Done") {
                             dismiss()
                         }
-                        .foregroundStyle(Color.oliloPurple)
+                        .foregroundStyle(Color.oliloTheme)
                     }
                 }
         }
@@ -40,11 +40,11 @@ struct OliloIframeWebViewSheet: View {
                         Button("Done") {
                             dismiss()
                         }
-                        .foregroundStyle(Color.oliloPurple)
+                        .foregroundStyle(Color.oliloTheme)
                     }
                 }
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
     }
 }
 

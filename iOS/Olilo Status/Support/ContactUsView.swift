@@ -44,7 +44,7 @@ struct ContactUsView: View {
             .scrollContentBackground(.hidden)
             .iPadReadableContent()
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .navigationTitle("Contact Us")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -81,7 +81,7 @@ private struct ContactSystemRowLabel: View {
                 .foregroundStyle(.white)
         } icon: {
             Image(systemName: systemImage)
-                .foregroundStyle(Color.oliloPurple)
+                .foregroundStyle(Color.oliloTheme)
                 .frame(width: 20, height: 20)
         }
     }

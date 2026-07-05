@@ -2,8 +2,78 @@ import Combine
 import SwiftUI
 import UIKit
 
+enum OliloTheme: String, CaseIterable, Identifiable {
+    case oliloPurple
+    case oliloBlue
+    case oliloRed
+    case oliloGreen
+    case oliloOrange
+
+    static let storageKey = "selectedOliloTheme"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .oliloPurple: return "Olilo Purple"
+        case .oliloBlue: return "Olilo Blue"
+        case .oliloRed: return "Olilo Red"
+        case .oliloGreen: return "Olilo Green"
+        case .oliloOrange: return "Olilo Orange"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .oliloPurple: return .oliloPurple
+        case .oliloBlue: return .oliloBlue
+        case .oliloRed: return .oliloRed
+        case .oliloGreen: return .oliloGreen
+        case .oliloOrange: return .oliloOrange
+        }
+    }
+
+    var backgroundColors: [Color] {
+        switch self {
+        case .oliloPurple:
+            return [.black, Color(red: 0.13, green: 0.04, blue: 0.24), Color(red: 0.30, green: 0.08, blue: 0.48)]
+        case .oliloBlue:
+            return [.black, Color(red: 0.03, green: 0.09, blue: 0.25), Color(red: 0.05, green: 0.22, blue: 0.48)]
+        case .oliloRed:
+            return [.black, Color(red: 0.22, green: 0.03, blue: 0.06), Color(red: 0.48, green: 0.08, blue: 0.12)]
+        case .oliloGreen:
+            return [.black, Color(red: 0.03, green: 0.16, blue: 0.10), Color(red: 0.04, green: 0.34, blue: 0.20)]
+        case .oliloOrange:
+            return [.black, Color(red: 0.22, green: 0.10, blue: 0.02), Color(red: 0.52, green: 0.22, blue: 0.04)]
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .oliloPurple: return nil
+        case .oliloBlue: return "OliloBlueIcon"
+        case .oliloRed: return "OliloRedIcon"
+        case .oliloGreen: return "OliloGreenIcon"
+        case .oliloOrange: return "OliloOrangeIcon"
+        }
+    }
+
+    static var selected: OliloTheme {
+        let rawValue = UserDefaults.standard.string(forKey: storageKey) ?? OliloTheme.oliloPurple.rawValue
+        return OliloTheme(rawValue: rawValue) ?? .oliloPurple
+    }
+}
+
 extension Color {
     static let oliloPurple = Color(red: 0.70, green: 0.28, blue: 1.0)
+    static let oliloBlue = Color(red: 0.16, green: 0.52, blue: 1.0)
+    static let oliloRed = Color(red: 1.0, green: 0.25, blue: 0.32)
+    static let oliloGreen = Color(red: 0.18, green: 0.78, blue: 0.44)
+    static let oliloOrange = Color(red: 1.0, green: 0.55, blue: 0.18)
+
+    static var oliloTheme: Color {
+        OliloTheme.selected.accentColor
+    }
 }
 
 enum AppTab: Hashable {
@@ -58,7 +128,7 @@ struct ContentView: View {
             }
             .tag(AppTab.settings)
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .preferredColorScheme(.dark)
         .background(OliloDarkGradientBackground())
         .onAppear {
@@ -104,13 +174,15 @@ private struct OnboardingPresenter: ViewModifier {
 }
 
 struct OliloDarkGradientBackground: View {
+    @AppStorage(OliloTheme.storageKey) private var selectedThemeRawValue = OliloTheme.oliloPurple.rawValue
+
+    private var theme: OliloTheme {
+        OliloTheme(rawValue: selectedThemeRawValue) ?? .oliloPurple
+    }
+
     var body: some View {
         LinearGradient(
-            colors: [
-                .black,
-                Color(red: 0.13, green: 0.04, blue: 0.24),
-                Color(red: 0.30, green: 0.08, blue: 0.48)
-            ],
+            colors: theme.backgroundColors,
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

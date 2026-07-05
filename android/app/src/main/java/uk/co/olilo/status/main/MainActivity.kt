@@ -94,6 +94,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -101,6 +102,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -149,11 +151,10 @@ import uk.co.olilo.status.status.groupedComponents
 import uk.co.olilo.status.notifications.NotificationPreferences
 import uk.co.olilo.status.notifications.NotificationStore
 import uk.co.olilo.status.notifications.OliloNotifications
-import uk.co.olilo.status.status.oliloBackgroundBottom
-import uk.co.olilo.status.status.oliloBackgroundMid
-import uk.co.olilo.status.status.oliloBackgroundTop
-import uk.co.olilo.status.status.oliloPurple
+import uk.co.olilo.status.status.OliloTheme
 import uk.co.olilo.status.status.readableStatus
+import uk.co.olilo.status.status.loadOliloTheme
+import uk.co.olilo.status.status.saveOliloTheme
 import uk.co.olilo.status.status.statusColor
 import uk.co.olilo.status.status.statusSeverity
 import androidx.core.content.edit
@@ -167,8 +168,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         launchRequest = launchRequest.copy(route = intent.requestedRoute())
         setContent {
-            OliloStatusTheme {
-                OliloApp(launchRequest)
+            var selectedTheme by remember { mutableStateOf(loadOliloTheme(this@MainActivity)) }
+            OliloStatusTheme(selectedTheme) {
+                OliloApp(
+                    launchRequest = launchRequest,
+                    onThemeSelected = { theme ->
+                        selectedTheme = theme
+                        saveOliloTheme(this@MainActivity, theme)
+                    },
+                )
             }
         }
     }
@@ -188,6 +196,8 @@ class MainActivity : ComponentActivity() {
 
 private data class LaunchRequest(val route: String, val nonce: Int)
 
+private val LocalOliloTheme = staticCompositionLocalOf { OliloTheme.OliloPurple }
+
 private enum class Route(val path: String, val label: String, val icon: ImageVector) {
     Status("status", "Status", Icons.Filled.Dashboard),
     Notices("notices", "Notices", Icons.Filled.Notifications),
@@ -202,7 +212,10 @@ private fun Intent?.requestedRoute(): String = when (this?.getStringExtra(MainAc
 
 /** Hosts the tab navigation shell and applies launch requests from notifications. */
 @Composable
-private fun OliloApp(launchRequest: LaunchRequest) {
+private fun OliloApp(
+    launchRequest: LaunchRequest,
+    onThemeSelected: (OliloTheme) -> Unit,
+) {
     val context = LocalContext.current
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
@@ -261,6 +274,7 @@ private fun OliloApp(launchRequest: LaunchRequest) {
                 composable(Route.Notices.path) { NoticesScreen(navController) }
                 composable(Route.Settings.path) { SettingsScreen(navController) }
                 composable("notification-settings") { NotificationSettingsScreen(navController) }
+                composable("appearance-settings") { AppearanceSettingsScreen(navController, onThemeSelected) }
                 composable("credits") { CreditsPage(navController) }
                 composable("contact") { ContactUsPage(navController) }
                 composable("web/{title}/{url}") { entry ->
@@ -404,7 +418,7 @@ private fun OnboardingScreen(
                     Icon(
                         page.icon,
                         contentDescription = null,
-                        tint = oliloPurple,
+                        tint = LocalOliloTheme.current.accentColor,
                         modifier = Modifier.size(72.dp),
                     )
                     Column(
@@ -431,7 +445,7 @@ private fun OnboardingScreen(
                                     Icon(
                                         Icons.Filled.CheckCircle,
                                         contentDescription = null,
-                                        tint = oliloPurple,
+                                        tint = LocalOliloTheme.current.accentColor,
                                         modifier = Modifier
                                             .padding(top = 2.dp)
                                             .size(20.dp),
@@ -489,7 +503,7 @@ private fun OnboardingPageIndicator(selectedPage: Int, pageCount: Int) {
                 modifier = Modifier
                     .size(if (index == selectedPage) 10.dp else 8.dp)
                     .clip(CircleShape)
-                    .background(if (index == selectedPage) oliloPurple else Color(0x66CEC1D8)),
+                    .background(if (index == selectedPage) LocalOliloTheme.current.accentColor else Color(0x66CEC1D8)),
             )
         }
     }
@@ -497,35 +511,46 @@ private fun OnboardingPageIndicator(selectedPage: Int, pageCount: Int) {
 
 /** Applies the dark Olilo Material theme to app content. */
 @Composable
-private fun OliloStatusTheme(content: @Composable () -> Unit) {
+private fun OliloStatusTheme(theme: OliloTheme, content: @Composable () -> Unit) {
     val colorScheme = darkColorScheme(
-        primary = oliloPurple,
+        primary = theme.accentColor,
         secondary = Color(0xFF64B5F6),
-        background = oliloBackgroundTop,
+        background = theme.backgroundColors.top,
         surface = Color(0xD91A1025),
         surfaceVariant = Color(0xE6261737),
         onPrimary = Color.White,
         onSurface = Color.White,
         onSurfaceVariant = Color(0xFFE2D8EA),
     )
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    CompositionLocalProvider(LocalOliloTheme provides theme) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }
 
 /** Draws the shared full-screen gradient behind app content. */
 @Composable
 private fun GradientBackground(content: @Composable () -> Unit) {
+    val theme = LocalOliloTheme.current
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    listOf(oliloBackgroundTop, oliloBackgroundMid, oliloBackgroundBottom),
+                    listOf(
+                        theme.backgroundColors.top,
+                        theme.backgroundColors.mid,
+                        theme.backgroundColors.bottom,
+                    ),
                 ),
             ),
     ) {
         content()
     }
 }
+
+@Composable
+private fun themedStatusColor(status: String): Color =
+    statusColor(status, LocalOliloTheme.current.accentColor)
 
 /** Renders the app toolbar with optional back, refresh, and configure actions. */
 @Composable
@@ -557,7 +582,7 @@ private fun OliloTopBar(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = oliloPurple,
+                    tint = LocalOliloTheme.current.accentColor,
                 )
             }
         } else if (onConfigure != null) {
@@ -568,7 +593,7 @@ private fun OliloTopBar(
                 Icon(
                     leadingIcon,
                     contentDescription = leadingContentDescription,
-                    tint = oliloPurple,
+                    tint = LocalOliloTheme.current.accentColor,
                 )
             }
         }
@@ -586,7 +611,7 @@ private fun OliloTopBar(
                     Icon(
                         Icons.Filled.Refresh,
                         contentDescription = "Refresh",
-                        tint = oliloPurple,
+                        tint = LocalOliloTheme.current.accentColor,
                     )
                 }
             }
@@ -608,7 +633,7 @@ private fun OpenUrlButton(
         leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
         colors = AssistChipDefaults.assistChipColors(
             labelColor = Color.White,
-            leadingIconContentColor = oliloPurple,
+            leadingIconContentColor = LocalOliloTheme.current.accentColor,
             containerColor = Color(0x332B1C3D),
         ),
     )
@@ -665,7 +690,7 @@ private fun LoadingOrError(
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             isLoading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = oliloPurple)
+                CircularProgressIndicator(color = LocalOliloTheme.current.accentColor)
                 Spacer(Modifier.height(12.dp))
                 Text(loadingText)
             }
@@ -1058,10 +1083,10 @@ private fun ComponentDisplayEditorRow(
             )
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${component.name} up", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${component.name} up", tint = LocalOliloTheme.current.accentColor)
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${component.name} down", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${component.name} down", tint = LocalOliloTheme.current.accentColor)
         }
         Switch(
             checked = isVisible,
@@ -1086,7 +1111,7 @@ private fun componentEditorDetail(component: StatusComponent): String = buildLis
 private fun EmptyComponentsCard() {
     StatusCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = oliloPurple)
+            Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
             Text("No components shown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("Use the component editor to show services on this page.", color = Color(0xFFCEC1D8))
         }
@@ -1159,7 +1184,7 @@ difference of accessibilty settings. Will be enabled regardless of settings. */
 /** Displays the animated status icon used by the overview card. */
 @Composable
 private fun PulsingStatusIcon(status: String) {
-    val color = statusColor(status)
+    val color = themedStatusColor(status)
     val readable = readableStatus(status)
     val icon = if (statusSeverity(status) == 0) Icons.Filled.CheckCircle else Icons.Filled.Error
     val transition = rememberInfiniteTransition(label = "Status icon pulse")
@@ -1377,7 +1402,7 @@ private fun NoticeFilterChip(selected: Boolean, label: String, onClick: () -> Un
             labelColor = Color.White,
             selectedLabelColor = Color.White,
             containerColor = Color(0x332B1C3D),
-            selectedContainerColor = oliloPurple.copy(alpha = 0.35f),
+            selectedContainerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.35f),
         ),
     )
 }
@@ -1455,7 +1480,7 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         updates.forEach { update ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(update.status, color = statusColor(update.status), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                Text(update.status, color = themedStatusColor(update.status), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                                 Text(update.message, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
                             }
                         }
@@ -1480,7 +1505,7 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                         label = { Text("${updates.size} update${if (updates.size == 1) "" else "s"}") },
                         colors = AssistChipDefaults.assistChipColors(
                             labelColor = Color.White,
-                            containerColor = oliloPurple.copy(alpha = 0.25f),
+                            containerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.25f),
                         ),
                     )
                 }
@@ -1499,7 +1524,7 @@ private fun NoticeTitleRow(title: String, subtitle: String, icon: ImageVector, s
             contentDescription = "$title, $subtitle, ${readableStatus(status)}"
         },
     ) {
-        Icon(icon, contentDescription = null, tint = oliloPurple, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -1535,7 +1560,7 @@ private fun StatusDot(status: String, size: Int) {
         Modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(statusColor(status)),
+            .background(themedStatusColor(status)),
     )
 }
 
@@ -1544,12 +1569,12 @@ private fun StatusDot(status: String, size: Int) {
 private fun StatusBadge(text: String, status: String) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = statusColor(status).copy(alpha = 0.16f),
-        contentColor = statusColor(status),
+        color = themedStatusColor(status).copy(alpha = 0.16f),
+        contentColor = themedStatusColor(status),
     ) {
         Text(
             text,
-            color = statusColor(status),
+            color = themedStatusColor(status),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -1588,6 +1613,13 @@ private fun SettingsScreen(navController: NavHostController) {
                 SettingsSection("Notifications") {
                     SettingsNavRow("Status Updates", Icons.Filled.Notifications, showDivider = false) {
                         navController.navigate("notification-settings")
+                    }
+                }
+            }
+            item {
+                SettingsSection("Appearance") {
+                    SettingsNavRow("Theme", Icons.Filled.Tune, showDivider = false) {
+                        navController.navigate("appearance-settings")
                     }
                 }
             }
@@ -1659,6 +1691,76 @@ private fun SettingsScreen(navController: NavHostController) {
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Renders app-wide appearance controls. */
+@Composable
+private fun AppearanceSettingsScreen(
+    navController: NavHostController,
+    onThemeSelected: (OliloTheme) -> Unit,
+) {
+    val selectedTheme = LocalOliloTheme.current
+
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = "Appearance", navController = navController)
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                SettingsSection("Theme") {
+                    OliloTheme.entries.forEachIndexed { index, theme ->
+                        ListItem(
+                            headlineContent = { Text(theme.displayName, color = Color.White) },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(theme.accentColor),
+                                )
+                            },
+                            trailingContent = {
+                                if (theme == selectedTheme) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = LocalOliloTheme.current.accentColor,
+                                    )
+                                }
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent,
+                                headlineColor = Color.White,
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Transparent)
+                                .clickable { onThemeSelected(theme) }
+                                .semantics {
+                                    role = Role.Button
+                                    stateDescription = if (theme == selectedTheme) "Selected" else "Not selected"
+                                },
+                        )
+                        if (index != OliloTheme.entries.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color.White.copy(alpha = 0.06f)),
+                            )
+                        }
+                    }
+                    Text(
+                        "The selected colour is used across app controls, links, icons, and the app background.",
+                        color = Color(0xFFCEC1D8),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
                 }
             }
         }
@@ -1918,7 +2020,7 @@ private fun SettingsToggleRow(
 ) {
     ListItem(
         headlineContent = { Text(title, color = Color.White) },
-        leadingContent = { Icon(icon, contentDescription = null, tint = oliloPurple) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor) },
         trailingContent = {
             Switch(
                 checked = checked,
@@ -1929,7 +2031,7 @@ private fun SettingsToggleRow(
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
             headlineColor = Color.White,
-            leadingIconColor = oliloPurple,
+            leadingIconColor = LocalOliloTheme.current.accentColor,
         ),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -1973,13 +2075,13 @@ private fun SettingsRow(
                     modifier = Modifier.size(20.dp),
                 )
             } else {
-                Icon(icon, contentDescription = null, tint = oliloPurple)
+                Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
             }
         },
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
             headlineColor = Color.White,
-            leadingIconColor = oliloPurple,
+            leadingIconColor = LocalOliloTheme.current.accentColor,
         ),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))

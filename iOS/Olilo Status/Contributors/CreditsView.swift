@@ -51,7 +51,7 @@ private struct CreditsRowLabel: View {
             }
         } icon: {
             Image(systemName: systemImage)
-                .foregroundStyle(Color.oliloPurple)
+                .foregroundStyle(Color.oliloTheme)
         }
     }
 }

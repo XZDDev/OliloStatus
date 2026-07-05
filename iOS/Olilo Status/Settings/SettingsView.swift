@@ -30,6 +30,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Appearance") {
+                    NavigationLink {
+                        AppearanceSettingsView()
+                    } label: {
+                        SettingsRowLabel(title: "Theme", systemImage: "paintpalette")
+                    }
+                }
+
                 Section("Support") {
                     NavigationLink {
                         ContactUsView()
@@ -109,7 +117,7 @@ struct SettingsView: View {
                 }
             }
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .modifier(
             SettingsWebPagePresenter(
                 webPage: $presentedWebPage,
@@ -189,7 +197,7 @@ private struct SettingsRowLabel: View {
                 .foregroundStyle(.white)
         } icon: {
             Image(systemName: systemImage)
-                .foregroundStyle(Color.oliloPurple)
+                .foregroundStyle(Color.oliloTheme)
         }
     }
 }
