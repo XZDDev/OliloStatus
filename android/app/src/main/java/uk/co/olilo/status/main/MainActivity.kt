@@ -2,6 +2,8 @@ package uk.co.olilo.status.main
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -159,6 +161,8 @@ import uk.co.olilo.status.status.loadOliloTheme
 import uk.co.olilo.status.status.saveOliloTheme
 import uk.co.olilo.status.status.statusColor
 import uk.co.olilo.status.status.statusSeverity
+import uk.co.olilo.status.widget.OliloNoticesWidgetProvider
+import uk.co.olilo.status.widget.OliloStatusWidgetProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 
@@ -175,8 +179,12 @@ class MainActivity : ComponentActivity() {
                 OliloApp(
                     launchRequest = launchRequest,
                     onThemeSelected = { theme ->
-                        selectedTheme = theme
-                        saveOliloTheme(this@MainActivity, theme)
+                        val didSave = saveOliloTheme(this@MainActivity, theme)
+                        if (didSave) {
+                            selectedTheme = theme
+                            refreshOliloWidgets(this@MainActivity)
+                        }
+                        didSave
                     },
                 )
             }
@@ -216,7 +224,7 @@ private fun Intent?.requestedRoute(): String = when (this?.getStringExtra(MainAc
 @Composable
 private fun OliloApp(
     launchRequest: LaunchRequest,
-    onThemeSelected: (OliloTheme) -> Unit,
+    onThemeSelected: (OliloTheme) -> Boolean,
 ) {
     val context = LocalContext.current
     val navController = rememberNavController()
@@ -338,6 +346,19 @@ private fun closeAppForRestart(context: Context) {
     (context as? ComponentActivity)?.finishAffinity()
     Process.killProcess(Process.myPid())
     exitProcess(0)
+}
+
+/** Forces existing widgets to redraw after theme preferences change. */
+private fun refreshOliloWidgets(context: Context) {
+    val appWidgetManager = AppWidgetManager.getInstance(context)
+    appWidgetManager.getAppWidgetIds(ComponentName(context, OliloStatusWidgetProvider::class.java))
+        .forEach { appWidgetId ->
+            OliloStatusWidgetProvider.refreshWidget(context, appWidgetManager, appWidgetId)
+        }
+    appWidgetManager.getAppWidgetIds(ComponentName(context, OliloNoticesWidgetProvider::class.java))
+        .forEach { appWidgetId ->
+            OliloNoticesWidgetProvider.refreshWidget(context, appWidgetManager, appWidgetId)
+        }
 }
 
 /** Describes one onboarding step and the short checklist shown on that page. */
@@ -559,7 +580,7 @@ private fun GradientBackground(content: @Composable () -> Unit) {
 
 @Composable
 private fun themedStatusColor(status: String): Color =
-    statusColor(status, LocalOliloTheme.current.accentColor)
+    statusColor(status)
 
 @Composable
 private fun themedCardColor(): Color =
@@ -1726,7 +1747,7 @@ private fun SettingsScreen(navController: NavHostController) {
 @Composable
 private fun AppearanceSettingsScreen(
     navController: NavHostController,
-    onThemeSelected: (OliloTheme) -> Unit,
+    onThemeSelected: (OliloTheme) -> Boolean,
 ) {
     val context = LocalContext.current
     val selectedTheme = LocalOliloTheme.current
@@ -1769,8 +1790,7 @@ private fun AppearanceSettingsScreen(
                                 .background(Color.Transparent)
                                 .clickable {
                                     if (theme != selectedTheme) {
-                                        onThemeSelected(theme)
-                                        isRestartDialogVisible = true
+                                        isRestartDialogVisible = onThemeSelected(theme)
                                     }
                                 }
                                 .semantics {

@@ -59,8 +59,7 @@ enum OliloTheme: String, CaseIterable, Identifiable {
     }
 
     static var selected: OliloTheme {
-        let rawValue = UserDefaults.standard.string(forKey: storageKey) ?? OliloTheme.oliloPurple.rawValue
-        return OliloTheme(rawValue: rawValue) ?? .oliloPurple
+        OliloTheme(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .oliloPurple
     }
 }
 
@@ -174,11 +173,7 @@ private struct OnboardingPresenter: ViewModifier {
 }
 
 struct OliloDarkGradientBackground: View {
-    @AppStorage(OliloTheme.storageKey) private var selectedThemeRawValue = OliloTheme.oliloPurple.rawValue
-
-    private var theme: OliloTheme {
-        OliloTheme(rawValue: selectedThemeRawValue) ?? .oliloPurple
-    }
+    @AppStorage(OliloTheme.storageKey) private var theme: OliloTheme = .oliloPurple
 
     var body: some View {
         LinearGradient(

@@ -65,12 +65,12 @@ fun loadOliloTheme(context: Context): OliloTheme {
     return OliloTheme.entries.firstOrNull { it.name == rawValue } ?: OliloTheme.OliloPurple
 }
 
-/** Persists the selected app-wide appearance theme. */
-fun saveOliloTheme(context: Context, theme: OliloTheme) {
-    context.getSharedPreferences(APPEARANCE_PREFERENCES_NAME, Context.MODE_PRIVATE)
+/** Persists the selected app-wide appearance theme before process restart. */
+fun saveOliloTheme(context: Context, theme: OliloTheme): Boolean {
+    return context.getSharedPreferences(APPEARANCE_PREFERENCES_NAME, Context.MODE_PRIVATE)
         .edit()
         .putString(SELECTED_THEME_KEY, theme.name)
-        .apply()
+        .commit()
 }
 
 /** Maps backend status strings to numeric severity for sorting and summaries. */
@@ -84,8 +84,8 @@ fun statusSeverity(status: String): Int = when (status.uppercase(Locale.UK)) {
 }
 
 /** Chooses the display color associated with a backend status string. */
-fun statusColor(status: String, themeColor: Color = oliloPurple): Color = when (status.uppercase(Locale.UK)) {
-    "UP", "OPERATIONAL", "RESOLVED", "COMPLETED" -> themeColor
+fun statusColor(status: String): Color = when (status.uppercase(Locale.UK)) {
+    "UP", "OPERATIONAL", "RESOLVED", "COMPLETED" -> Color(0xFF4CAF50)
     "UNDERMAINTENANCE", "MONITORING", "NOTSTARTEDYET" -> Color(0xFF64B5F6)
     "HASISSUES", "HAS_ISSUES", "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED" -> Color(0xFFFFB74D)
     "PARTIALOUTAGE", "PARTIAL_OUTAGE", "INVESTIGATING" -> Color(0xFFFFE066)

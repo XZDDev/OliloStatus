@@ -12,7 +12,6 @@ import uk.co.olilo.status.R
 import uk.co.olilo.status.main.MainActivity
 import uk.co.olilo.status.status.StatusPageSummary
 import uk.co.olilo.status.status.formatRemoteDate
-import uk.co.olilo.status.status.loadOliloTheme
 import uk.co.olilo.status.status.readableStatus
 import uk.co.olilo.status.status.statusColor
 import java.net.HttpURLConnection
@@ -99,8 +98,7 @@ class OliloNoticesWidgetProvider : AppWidgetProvider() {
             isLoading: Boolean,
             didLoadSuccessfully: Boolean = true,
         ) {
-            val themeColor = loadOliloTheme(context).accentColor
-            val accentColor = notices.firstOrNull()?.status?.let { statusColor(it, themeColor).toArgb() }
+            val accentColor = notices.firstOrNull()?.status?.let { statusColor(it).toArgb() }
                 ?: if (noticeType == "Maintenance") 0xFF64B5F6.toInt() else 0xFF4CAF50.toInt()
             val statusText = when {
                 isLoading -> "Loading"

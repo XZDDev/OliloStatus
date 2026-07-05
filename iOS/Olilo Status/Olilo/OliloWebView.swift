@@ -68,11 +68,12 @@ private struct OliloIframeWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
+        configuration.ignoresViewportScaleLimits = true
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.scrollView.bouncesZoom = true
         webView.scrollView.maximumZoomScale = 3
-        webView.scrollView.minimumZoomScale = 1
+        webView.scrollView.minimumZoomScale = 0.25
         webView.scrollView.alwaysBounceHorizontal = true
         webView.scrollView.alwaysBounceVertical = true
         loadIframe(in: webView)

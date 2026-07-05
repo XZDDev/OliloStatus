@@ -3,13 +3,9 @@ import SwiftUI
 import UIKit
 
 struct AppearanceSettingsView: View {
-    @AppStorage(OliloTheme.storageKey) private var selectedThemeRawValue = OliloTheme.oliloPurple.rawValue
+    @AppStorage(OliloTheme.storageKey) private var selectedTheme: OliloTheme = .oliloPurple
     @State private var appIconErrorMessage: String?
     @State private var isRestartAlertPresented = false
-
-    private var selectedTheme: OliloTheme {
-        OliloTheme(rawValue: selectedThemeRawValue) ?? .oliloPurple
-    }
 
     var body: some View {
         ZStack {
@@ -86,7 +82,7 @@ struct AppearanceSettingsView: View {
 
     private func selectTheme(_ theme: OliloTheme) {
         guard theme != selectedTheme else { return }
-        selectedThemeRawValue = theme.rawValue
+        selectedTheme = theme
         applyAppIcon(for: theme)
     }
 
