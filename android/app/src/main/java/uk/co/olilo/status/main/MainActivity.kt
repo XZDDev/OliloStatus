@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -92,6 +93,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -116,6 +120,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -228,9 +233,11 @@ private fun OliloApp(
     onThemeSelected: (OliloTheme) -> Boolean,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val usesFoldableLayout = configuration.screenWidthDp >= 600
     // Keep onboarding presentation at the app shell so first launch and Settings replay share one flow.
     var hasCompletedOnboarding by remember { mutableStateOf(loadHasCompletedOnboarding(context)) }
     var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding) }
@@ -257,59 +264,32 @@ private fun OliloApp(
             contentColor = Color.White,
             contentWindowInsets = WindowInsets(0.dp),
             bottomBar = {
-                if (Route.entries.any { it.path == currentRoute }) {
-                    val theme = LocalOliloTheme.current
-                    NavigationBar(containerColor = themedNavigationBarColor()) {
-                        Route.entries.forEach { route ->
-                            NavigationBarItem(
-                                selected = currentRoute == route.path,
-                                onClick = {
-                                    navController.navigate(route.path) {
-                                        popUpTo(Route.Status.path)
-                                        launchSingleTop = true
-                                    }
-                                },
-                                icon = { Icon(route.icon, contentDescription = route.label) },
-                                label = { Text(route.label) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = theme.accentColor,
-                                    selectedTextColor = theme.accentColor,
-                                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
-                                    unselectedIconColor = Color(0xFFE2D8EA),
-                                    unselectedTextColor = Color(0xFFE2D8EA),
-                                ),
-                            )
-                        }
-                    }
+                if (!usesFoldableLayout && Route.entries.any { it.path == currentRoute }) {
+                    OliloBottomNavigationBar(currentRoute, navController)
                 }
             },
         ) { padding ->
-            NavHost(
-                navController = navController,
-                startDestination = Route.Status.path,
-                modifier = Modifier.padding(padding),
-            ) {
-                composable(Route.Status.path) { StatusScreen(navController) }
-                composable(Route.Notices.path) { NoticesScreen(navController) }
-                composable(Route.Settings.path) { SettingsScreen(navController) }
-                composable("notification-settings") { NotificationSettingsScreen(navController) }
-                composable("appearance-settings") { AppearanceSettingsScreen(navController, onThemeSelected) }
-                composable("credits") { CreditsPage(navController) }
-                composable("contact") { ContactUsPage(navController) }
-                composable("web/{title}/{url}") { entry ->
-                    WebPage(
+            if (usesFoldableLayout && Route.entries.any { it.path == currentRoute }) {
+                Row(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize(),
+                ) {
+                    OliloFoldableNavigationRail(currentRoute, navController)
+                    OliloNavHost(
                         navController = navController,
-                        title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
-                        url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+                        onThemeSelected = onThemeSelected,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                 }
-                composable("iframe/{title}/{url}") { entry ->
-                    IframePage(
-                        navController = navController,
-                        title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
-                        url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
-                    )
-                }
+            } else {
+                OliloNavHost(
+                    navController = navController,
+                    onThemeSelected = onThemeSelected,
+                    modifier = Modifier.padding(padding),
+                )
             }
         }
 
@@ -321,6 +301,97 @@ private fun OliloApp(
                 onDismiss = { showOnboarding = false },
             )
         }
+    }
+}
+
+@Composable
+private fun OliloNavHost(
+    navController: NavHostController,
+    onThemeSelected: (OliloTheme) -> Boolean,
+    modifier: Modifier = Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Route.Status.path,
+        modifier = modifier,
+    ) {
+        composable(Route.Status.path) { StatusScreen(navController) }
+        composable(Route.Notices.path) { NoticesScreen(navController) }
+        composable(Route.Settings.path) { SettingsScreen(navController) }
+        composable("notification-settings") { NotificationSettingsScreen(navController) }
+        composable("appearance-settings") { AppearanceSettingsScreen(navController, onThemeSelected) }
+        composable("credits") { CreditsPage(navController) }
+        composable("contact") { ContactUsPage(navController) }
+        composable("web/{title}/{url}") { entry ->
+            WebPage(
+                navController = navController,
+                title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
+                url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+            )
+        }
+        composable("iframe/{title}/{url}") { entry ->
+            IframePage(
+                navController = navController,
+                title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
+                url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OliloBottomNavigationBar(currentRoute: String?, navController: NavHostController) {
+    val theme = LocalOliloTheme.current
+    NavigationBar(containerColor = themedNavigationBarColor()) {
+        Route.entries.forEach { route ->
+            NavigationBarItem(
+                selected = currentRoute == route.path,
+                onClick = { navController.navigateRootRoute(route) },
+                icon = { Icon(route.icon, contentDescription = route.label) },
+                label = { Text(route.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = theme.accentColor,
+                    selectedTextColor = theme.accentColor,
+                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
+                    unselectedIconColor = Color(0xFFE2D8EA),
+                    unselectedTextColor = Color(0xFFE2D8EA),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OliloFoldableNavigationRail(currentRoute: String?, navController: NavHostController) {
+    val theme = LocalOliloTheme.current
+    NavigationRail(
+        containerColor = themedNavigationBarColor(),
+        contentColor = Color.White,
+        modifier = Modifier.fillMaxHeight(),
+    ) {
+        Spacer(Modifier.height(24.dp))
+        Route.entries.forEach { route ->
+            NavigationRailItem(
+                selected = currentRoute == route.path,
+                onClick = { navController.navigateRootRoute(route) },
+                icon = { Icon(route.icon, contentDescription = route.label) },
+                label = { Text(route.label) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = theme.accentColor,
+                    selectedTextColor = theme.accentColor,
+                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
+                    unselectedIconColor = Color(0xFFE2D8EA),
+                    unselectedTextColor = Color(0xFFE2D8EA),
+                ),
+            )
+        }
+    }
+}
+
+private fun NavHostController.navigateRootRoute(route: Route) {
+    navigate(route.path) {
+        popUpTo(Route.Status.path)
+        launchSingleTop = true
     }
 }
 
