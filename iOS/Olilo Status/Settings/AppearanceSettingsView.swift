@@ -1,9 +1,11 @@
+import Darwin
 import SwiftUI
 import UIKit
 
 struct AppearanceSettingsView: View {
     @AppStorage(OliloTheme.storageKey) private var selectedThemeRawValue = OliloTheme.oliloPurple.rawValue
     @State private var appIconErrorMessage: String?
+    @State private var isRestartAlertPresented = false
 
     private var selectedTheme: OliloTheme {
         OliloTheme(rawValue: selectedThemeRawValue) ?? .oliloPurple
@@ -17,8 +19,7 @@ struct AppearanceSettingsView: View {
                 Section {
                     ForEach(OliloTheme.allCases) { theme in
                         Button {
-                            selectedThemeRawValue = theme.rawValue
-                            applyAppIcon(for: theme)
+                            selectTheme(theme)
                         } label: {
                             HStack(spacing: 12) {
                                 Circle()
@@ -74,6 +75,19 @@ struct AppearanceSettingsView: View {
                 OliloToolbarLogo()
             }
         }
+        .alert("Restart required", isPresented: $isRestartAlertPresented) {
+            Button("Close App") {
+                exit(0)
+            }
+        } message: {
+            Text("Olilo Status will close now. Reopen it to finish applying your theme.")
+        }
+    }
+
+    private func selectTheme(_ theme: OliloTheme) {
+        guard theme != selectedTheme else { return }
+        selectedThemeRawValue = theme.rawValue
+        applyAppIcon(for: theme)
     }
 
     private func applyAppIcon(for theme: OliloTheme) {
@@ -81,13 +95,25 @@ struct AppearanceSettingsView: View {
 
         #if os(iOS)
         let idiom = UIDevice.current.userInterfaceIdiom
-        guard idiom == .phone || idiom == .pad else { return }
-        guard UIApplication.shared.supportsAlternateIcons else { return }
+        guard idiom == .phone || idiom == .pad else {
+            isRestartAlertPresented = true
+            return
+        }
+        guard UIApplication.shared.supportsAlternateIcons else {
+            isRestartAlertPresented = true
+            return
+        }
 
         UIApplication.shared.setAlternateIconName(theme.alternateIconName) { error in
-            guard let error else { return }
-            appIconErrorMessage = error.localizedDescription
+            Task { @MainActor in
+                if let error {
+                    appIconErrorMessage = error.localizedDescription
+                }
+                isRestartAlertPresented = true
+            }
         }
+        #else
+        isRestartAlertPresented = true
         #endif
     }
 }

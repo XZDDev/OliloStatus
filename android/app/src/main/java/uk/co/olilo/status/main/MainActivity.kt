@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Process
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -136,6 +137,7 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.system.exitProcess
 import uk.co.olilo.status.status.Incident
 import uk.co.olilo.status.status.Maintenance
 import uk.co.olilo.status.status.NoticeKind
@@ -329,6 +331,13 @@ private fun saveHasCompletedOnboarding(context: Context, hasCompleted: Boolean) 
         .edit {
             putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
         }
+}
+
+/** Closes the task and terminates the process after a setting requires a cold start. */
+private fun closeAppForRestart(context: Context) {
+    (context as? ComponentActivity)?.finishAffinity()
+    Process.killProcess(Process.myPid())
+    exitProcess(0)
 }
 
 /** Describes one onboarding step and the short checklist shown on that page. */
@@ -1703,7 +1712,9 @@ private fun AppearanceSettingsScreen(
     navController: NavHostController,
     onThemeSelected: (OliloTheme) -> Unit,
 ) {
+    val context = LocalContext.current
     val selectedTheme = LocalOliloTheme.current
+    var isRestartDialogVisible by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
         OliloTopBar(title = "Appearance", navController = navController)
@@ -1740,7 +1751,12 @@ private fun AppearanceSettingsScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(Color.Transparent)
-                                .clickable { onThemeSelected(theme) }
+                                .clickable {
+                                    if (theme != selectedTheme) {
+                                        onThemeSelected(theme)
+                                        isRestartDialogVisible = true
+                                    }
+                                }
                                 .semantics {
                                     role = Role.Button
                                     stateDescription = if (theme == selectedTheme) "Selected" else "Not selected"
@@ -1764,6 +1780,22 @@ private fun AppearanceSettingsScreen(
                 }
             }
         }
+    }
+
+    if (isRestartDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Restart required") },
+            text = { Text("Olilo Status will close now. Reopen it to finish applying your theme.") },
+            confirmButton = {
+                TextButton(onClick = { closeAppForRestart(context) }) {
+                    Text("Close App")
+                }
+            },
+            containerColor = Color(0xF2261737),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+        )
     }
 }
 
