@@ -367,6 +367,7 @@ struct StatusView: View {
                     let visibleIncidents = model.visibleIncidents(using: componentDisplayPreferences)
                     let visibleComponentCount = visibleComponentGroups.reduce(0) { $0 + $1.allComponents.count }
                     let visibleStatus = model.visibleStatus(using: componentDisplayPreferences)
+                    let hasNoActiveStatusItems = visibleAffectedComponents.isEmpty && visibleIncidents.isEmpty && model.maintenances.isEmpty
 
                     ScrollView {
                         LazyVStack(spacing: 18) {
@@ -396,6 +397,10 @@ struct StatusView: View {
                                 if !visibleAffectedComponents.isEmpty {
                                     StatusSectionHeader(title: "Affected Services", count: visibleAffectedComponents.count)
                                     AffectedServicesCard(components: visibleAffectedComponents)
+                                        .padding(.horizontal)
+                                } else if hasNoActiveStatusItems {
+                                    StatusSectionHeader(title: "Current Activity", count: 0)
+                                    EmptyActiveStatusCard()
                                         .padding(.horizontal)
                                 }
                             }
@@ -617,6 +622,39 @@ private struct EmptyComponentsCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct EmptyActiveStatusCard: View {
+    var body: some View {
+        StatusCard {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(statusColor("OPERATIONAL"))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(statusTimeGreeting()), everything is running normally")
+                        .font(.headline)
+                    Text("No incidents, maintenance, or affected services are active right now.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+private func statusTimeGreeting(now: Date = Date()) -> String {
+    let hour = Calendar.current.component(.hour, from: now)
+    switch hour {
+    case 5...11:
+        return "Good morning"
+    case 12...16:
+        return "Good afternoon"
+    default:
+        return "Good evening"
     }
 }
 

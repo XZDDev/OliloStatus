@@ -28,12 +28,12 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -144,6 +144,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 import kotlin.system.exitProcess
 import uk.co.olilo.status.status.Incident
@@ -1010,6 +1011,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
         val visibleIncidents = visibleIncidents(state.incidents, state.components, displayPreferences)
         val visibleComponentCount = visibleComponentGroups.sumOf { it.allComponents.size }
         val visibleStatus = visibleStatus(state.components, displayPreferences)
+        val hasNoActiveStatusItems = visibleAffected.isEmpty() && visibleIncidents.isEmpty() && state.maintenances.isEmpty()
 
         if (showComponentEditor) {
             ComponentDisplayEditorDialog(
@@ -1065,6 +1067,9 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                             }
                         }
                     }
+                } else if (hasNoActiveStatusItems) {
+                    item { SectionHeader("Current Activity", 0) }
+                    item { EmptyActiveStatusCard() }
                 }
             }
 
@@ -1093,6 +1098,40 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             }
         }
     }
+}
+
+/** Shows a friendly empty state when there are no active status issues. */
+@Composable
+private fun EmptyActiveStatusCard() {
+    StatusCard {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = themedStatusColor("OPERATIONAL"),
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "${statusTimeGreeting()}, everything is running normally",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "No incidents, maintenance, or affected services are active right now.",
+                    color = Color(0xFFCEC1D8),
+                )
+            }
+        }
+    }
+}
+
+/** Returns a simple local-time greeting for the status empty state. */
+private fun statusTimeGreeting(now: LocalTime = LocalTime.now()): String = when (now.hour) {
+    in 5..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
 }
 
 /** Displays quick links to Olilo operational tools. */
@@ -1514,6 +1553,9 @@ private fun NoticesScreen(navController: NavHostController, viewModel: NoticesVi
                                     SectionHeader("Current Notices", activeCount)
                                     state.activeIncidents.forEach { ActiveIncidentNoticeCard(it, navController) }
                                     state.activeMaintenances.forEach { ActiveMaintenanceNoticeCard(it, navController) }
+                                } else {
+                                    SectionHeader("Current Notices", activeCount)
+                                    EmptyActiveNoticesCard()
                                 }
                                 StatusCard {
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1566,6 +1608,18 @@ private fun StatusNotice.isOlderThan30Days(now: Instant = Instant.now()): Boolea
     val timestamp = updated ?: published ?: return false
     val noticeDate = runCatching { Instant.parse(timestamp) }.getOrNull() ?: return false
     return noticeDate.isBefore(now.minus(30, ChronoUnit.DAYS))
+}
+
+/** Shows the empty state for the foldable active notices pane. */
+@Composable
+private fun EmptyActiveNoticesCard() {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.Notifications, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
+            Text("No current active notices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("New incidents and maintenance will appear here.", color = Color(0xFFCEC1D8))
+        }
+    }
 }
 
 /** Renders an active incident notice card. */
@@ -1684,9 +1738,9 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                     }
                 }
             }
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 AssistChip(
                     onClick = { descriptionExpanded = !descriptionExpanded },
