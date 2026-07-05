@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import Charts
 import UIKit
 
 struct Incident: Identifiable, Decodable {

@@ -84,7 +84,7 @@ private fun NoticesWidgetConfigurationScreen(theme: OliloTheme, onNoticeTypeSele
         colorScheme = darkColorScheme(
             primary = theme.accentColor,
             background = theme.backgroundColors.top,
-            surface = Color(0xD91A1025),
+            surface = theme.backgroundColors.mid.copy(alpha = 0.85f),
             onSurface = Color.White,
         ),
     ) {
@@ -119,9 +119,9 @@ private fun NoticesWidgetConfigurationScreen(theme: OliloTheme, onNoticeTypeSele
                         .semantics {
                             role = Role.Button
                             contentDescription = "Show $noticeType in the large widget"
-                        },
+                    },
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xB3261737),
+                    color = theme.backgroundColors.mid.copy(alpha = 0.7f),
                     contentColor = Color.White,
                 ) {
                     Row(
