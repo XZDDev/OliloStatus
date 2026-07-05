@@ -678,6 +678,21 @@ private fun themedDialogColor(): Color =
 private fun themedNavigationBarColor(): Color =
     LocalOliloTheme.current.backgroundColors.top.copy(alpha = 0.95f)
 
+@Composable
+private fun usesFoldableContentLayout(): Boolean =
+    LocalConfiguration.current.screenWidthDp >= 600
+
+@Composable
+private fun FoldableContentRow(
+    first: @Composable () -> Unit,
+    second: @Composable () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.weight(1f)) { first() }
+        Box(Modifier.weight(1f)) { second() }
+    }
+}
+
 /** Renders the app toolbar with optional back, refresh, and configure actions. */
 @Composable
 private fun OliloTopBar(
@@ -962,6 +977,7 @@ private fun String.referencesComponentName(componentName: String): Boolean {
 private fun StatusScreen(navController: NavHostController, viewModel: StatusViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val usesFoldableLayout = usesFoldableContentLayout()
     var displayPreferences by remember { mutableStateOf(loadComponentDisplayPreferences(context)) }
     var showComponentEditor by remember { mutableStateOf(false) }
 
@@ -1009,18 +1025,37 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             state.summary?.let { summary ->
-                item {
-                    OverviewCard(
-                        summary = summary,
-                        state = state,
-                        displayStatus = visibleStatus,
-                        componentCount = visibleComponentCount,
-                        affectedCount = visibleAffected.size,
-                        incidentCount = visibleIncidents.size,
-                        navController = navController,
-                    )
+                if (usesFoldableLayout) {
+                    item {
+                        FoldableContentRow(
+                            first = {
+                                OverviewCard(
+                                    summary = summary,
+                                    state = state,
+                                    displayStatus = visibleStatus,
+                                    componentCount = visibleComponentCount,
+                                    affectedCount = visibleAffected.size,
+                                    incidentCount = visibleIncidents.size,
+                                    navController = navController,
+                                )
+                            },
+                            second = { StatusLinksCard(navController) },
+                        )
+                    }
+                } else {
+                    item {
+                        OverviewCard(
+                            summary = summary,
+                            state = state,
+                            displayStatus = visibleStatus,
+                            componentCount = visibleComponentCount,
+                            affectedCount = visibleAffected.size,
+                            incidentCount = visibleIncidents.size,
+                            navController = navController,
+                        )
+                    }
+                    item { StatusLinksCard(navController) }
                 }
-                item { StatusLinksCard(navController) }
                 if (visibleAffected.isNotEmpty()) {
                     item { SectionHeader("Affected Services", visibleAffected.size) }
                     item {
@@ -1437,6 +1472,7 @@ private fun ComponentRow(component: StatusComponent, showGroup: Boolean) {
 @Composable
 private fun NoticesScreen(navController: NavHostController, viewModel: NoticesViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val usesFoldableLayout = usesFoldableContentLayout()
     val filtered = state.notices
         .filter { notice -> state.selectedKind == null || notice.kind == state.selectedKind }
         .filter { notice -> !state.hideOldNotices || !notice.isOlderThan30Days() }
@@ -1469,23 +1505,58 @@ private fun NoticesScreen(navController: NavHostController, viewModel: NoticesVi
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val activeCount = state.activeIncidents.size + state.activeMaintenances.size
-            if (activeCount > 0) {
-                item { SectionHeader("Current Notices", activeCount) }
-                items(state.activeIncidents, key = { "current-incident-${it.id}" }) { ActiveIncidentNoticeCard(it, navController) }
-                items(state.activeMaintenances, key = { "current-maintenance-${it.id}" }) { ActiveMaintenanceNoticeCard(it, navController) }
-            }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
-                    NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") { viewModel.selectKind(
-                        NoticeKind.Incident) }
-                    NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") { viewModel.selectKind(
-                        NoticeKind.Maintenance) }
+            if (usesFoldableLayout) {
+                item {
+                    FoldableContentRow(
+                        first = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                if (activeCount > 0) {
+                                    SectionHeader("Current Notices", activeCount)
+                                    state.activeIncidents.forEach { ActiveIncidentNoticeCard(it, navController) }
+                                    state.activeMaintenances.forEach { ActiveMaintenanceNoticeCard(it, navController) }
+                                }
+                                StatusCard {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
+                                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") {
+                                            viewModel.selectKind(NoticeKind.Incident)
+                                        }
+                                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") {
+                                            viewModel.selectKind(NoticeKind.Maintenance)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        second = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SectionHeader("Notice History", filtered.size)
+                                filtered.forEach { NoticeHistoryCard(it, navController) }
+                            }
+                        },
+                    )
                 }
+            } else {
+                if (activeCount > 0) {
+                    item { SectionHeader("Current Notices", activeCount) }
+                    items(state.activeIncidents, key = { "current-incident-${it.id}" }) { ActiveIncidentNoticeCard(it, navController) }
+                    items(state.activeMaintenances, key = { "current-maintenance-${it.id}" }) { ActiveMaintenanceNoticeCard(it, navController) }
+                }
+
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
+                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") {
+                            viewModel.selectKind(NoticeKind.Incident)
+                        }
+                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") {
+                            viewModel.selectKind(NoticeKind.Maintenance)
+                        }
+                    }
+                }
+                item { SectionHeader("Notice History", filtered.size) }
+                items(filtered, key = { "history-notice-${it.id}" }) { NoticeHistoryCard(it, navController) }
             }
-            item { SectionHeader("Notice History", filtered.size) }
-            items(filtered, key = { "history-notice-${it.id}" }) { NoticeHistoryCard(it, navController) }
         }
     }
 }
@@ -1728,6 +1799,103 @@ private fun DetailRows(rows: List<Pair<String, String?>>) {
 @Composable
 private fun SettingsScreen(navController: NavHostController) {
     val context = LocalContext.current
+    val usesFoldableLayout = usesFoldableContentLayout()
+
+    @Composable
+    fun NotificationsSection() {
+        SettingsSection("Notifications") {
+            SettingsNavRow("Status Updates", Icons.Filled.Notifications, showDivider = false) {
+                navController.navigate("notification-settings")
+            }
+        }
+    }
+
+    @Composable
+    fun AppearanceSection() {
+        SettingsSection("Appearance") {
+            SettingsNavRow("Theme", Icons.Filled.Tune, showDivider = false) {
+                navController.navigate("appearance-settings")
+            }
+        }
+    }
+
+    @Composable
+    fun SupportSection() {
+        SettingsSection("Support") {
+            SettingsNavRow("Contact Us", Icons.Filled.Email) { navController.navigate("contact") }
+            SettingsLinkRow(
+                "Report a Problem",
+                "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
+                Icons.Filled.ReportProblem,
+                navController,
+                showDivider = false,
+            )
+        }
+    }
+
+    @Composable
+    fun ContributorsSection() {
+        SettingsSection("Contributors") {
+            SettingsNavRow("Credits", Icons.Filled.Info, showDivider = false) { navController.navigate("credits") }
+        }
+    }
+
+    @Composable
+    fun ComplianceSection() {
+        SettingsSection("Compliance") {
+            SettingsLinkRow("Privacy Policy", "https://olilo.co.uk/privacy", Icons.Filled.Description, navController)
+            SettingsLinkRow(
+                "Terms & Conditions",
+                "https://olilo.co.uk/terms",
+                Icons.Filled.Description,
+                navController,
+                showDivider = false,
+            )
+        }
+    }
+
+    @Composable
+    fun VersionSection() {
+        SettingsSection("Version") {
+            SettingsLinkRow(
+                title = "Contribute to Olilo Status",
+                url = "https://gitlab.com/team-olilo/status-app",
+                icon = Icons.Filled.Language,
+                navController = navController,
+                logoResId = R.drawable.logo_gitlab,
+                showDivider = false,
+            )
+            Text(
+                appVersion(context),
+                color = Color(0xFFCEC1D8),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .border(
+                        width = 1.dp,
+                        color = Color(0x59CEC1D8),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                textAlign = TextAlign.Center,
+            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.height(8.dp))
+                Image(
+                    painter = painterResource(R.drawable.olilo),
+                    contentDescription = "Olilo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.height(44.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "(c) 2026 Olilo UK & Ireland Ltd. Company number: 16352417",
+                    color = Color(0xFFCEC1D8),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         OliloTopBar(title = "Settings")
@@ -1735,89 +1903,17 @@ private fun SettingsScreen(navController: NavHostController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
-                SettingsSection("Notifications") {
-                    SettingsNavRow("Status Updates", Icons.Filled.Notifications, showDivider = false) {
-                        navController.navigate("notification-settings")
-                    }
-                }
-            }
-            item {
-                SettingsSection("Appearance") {
-                    SettingsNavRow("Theme", Icons.Filled.Tune, showDivider = false) {
-                        navController.navigate("appearance-settings")
-                    }
-                }
-            }
-            item {
-                SettingsSection("Support") {
-                    SettingsNavRow("Contact Us", Icons.Filled.Email) { navController.navigate("contact") }
-                    SettingsLinkRow(
-                        "Report a Problem",
-                        "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
-                        Icons.Filled.ReportProblem,
-                        navController,
-                        showDivider = false,
-                    )
-                }
-            }
-            item {
-                SettingsSection("Contributors") {
-                    SettingsNavRow("Credits", Icons.Filled.Info, showDivider = false) { navController.navigate("credits") }
-                }
-            }
-            item {
-                SettingsSection("Compliance") {
-                    SettingsLinkRow("Privacy Policy", "https://olilo.co.uk/privacy", Icons.Filled.Description, navController)
-                    SettingsLinkRow(
-                        "Terms & Conditions",
-                        "https://olilo.co.uk/terms",
-                        Icons.Filled.Description,
-                        navController,
-                        showDivider = false,
-                    )
-                }
-            }
-            item {
-                SettingsSection("Version") {
-                    SettingsLinkRow(
-                        title = "Contribute to Olilo Status",
-                        url = "https://gitlab.com/team-olilo/status-app",
-                        icon = Icons.Filled.Language,
-                        navController = navController,
-                        logoResId = R.drawable.logo_gitlab,
-                        showDivider = false,
-                    )
-                    Text(
-                        appVersion(context),
-                        color = Color(0xFFCEC1D8),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .border(
-                                width = 1.dp,
-                                color = Color(0x59CEC1D8),
-                                shape = RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.height(8.dp))
-                        Image(
-                            painter = painterResource(R.drawable.olilo),
-                            contentDescription = "Olilo",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.height(44.dp),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "(c) 2026 Olilo UK & Ireland Ltd. Company number: 16352417",
-                            color = Color(0xFFCEC1D8),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
+            if (usesFoldableLayout) {
+                item { FoldableContentRow({ NotificationsSection() }, { AppearanceSection() }) }
+                item { FoldableContentRow({ SupportSection() }, { ComplianceSection() }) }
+                item { FoldableContentRow({ ContributorsSection() }, { VersionSection() }) }
+            } else {
+                item { NotificationsSection() }
+                item { AppearanceSection() }
+                item { SupportSection() }
+                item { ContributorsSection() }
+                item { ComplianceSection() }
+                item { VersionSection() }
             }
         }
     }
