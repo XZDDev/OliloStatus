@@ -13,6 +13,7 @@ val oliloBlue = Color(0xFF2985FF)
 val oliloRed = Color(0xFFFF4052)
 val oliloGreen = Color(0xFF2EC771)
 val oliloOrange = Color(0xFFFF8C2E)
+val oliloPink = Color(0xFFFF4DB8)
 val oliloBackgroundTop = Color(0xFF050108)
 val oliloBackgroundMid = Color(0xFF210A3D)
 val oliloBackgroundBottom = Color(0xFF4D147A)
@@ -29,29 +30,34 @@ enum class OliloTheme(
     val backgroundColors: OliloThemeColors,
 ) {
     OliloPurple(
-        "Olilo Purple",
+        "Purple",
         oliloPurple,
         OliloThemeColors(oliloBackgroundTop, oliloBackgroundMid, oliloBackgroundBottom),
     ),
     OliloBlue(
-        "Olilo Blue",
+        "Blue",
         oliloBlue,
         OliloThemeColors(Color(0xFF050108), Color(0xFF081740), Color(0xFF0D387A)),
     ),
     OliloRed(
-        "Olilo Red",
+        "Red",
         oliloRed,
         OliloThemeColors(Color(0xFF050108), Color(0xFF38070F), Color(0xFF7A1420)),
     ),
     OliloGreen(
-        "Olilo Green",
+        "Green",
         oliloGreen,
         OliloThemeColors(Color(0xFF050108), Color(0xFF082819), Color(0xFF0A5733)),
     ),
     OliloOrange(
-        "Olilo Orange",
+        "Orange",
         oliloOrange,
         OliloThemeColors(Color(0xFF050108), Color(0xFF381904), Color(0xFF853809)),
+    ),
+    OliloPink(
+        "Pink",
+        oliloPink,
+        OliloThemeColors(Color(0xFF050108), Color(0xFF3B0829), Color(0xFF8A145F)),
     );
 }
 

@@ -8,6 +8,7 @@ enum OliloTheme: String, CaseIterable, Identifiable {
     case oliloRed
     case oliloGreen
     case oliloOrange
+    case oliloPink
 
     static let storageKey = "selectedOliloTheme"
 
@@ -15,11 +16,12 @@ enum OliloTheme: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .oliloPurple: return "Olilo Purple"
-        case .oliloBlue: return "Olilo Blue"
-        case .oliloRed: return "Olilo Red"
-        case .oliloGreen: return "Olilo Green"
-        case .oliloOrange: return "Olilo Orange"
+        case .oliloPurple: return "Purple"
+        case .oliloBlue: return "Blue"
+        case .oliloRed: return "Red"
+        case .oliloGreen: return "Green"
+        case .oliloOrange: return "Orange"
+        case .oliloPink: return "Pink"
         }
     }
 
@@ -30,6 +32,7 @@ enum OliloTheme: String, CaseIterable, Identifiable {
         case .oliloRed: return .oliloRed
         case .oliloGreen: return .oliloGreen
         case .oliloOrange: return .oliloOrange
+        case .oliloPink: return .oliloPink
         }
     }
 
@@ -45,6 +48,8 @@ enum OliloTheme: String, CaseIterable, Identifiable {
             return [.black, Color(red: 0.03, green: 0.16, blue: 0.10), Color(red: 0.04, green: 0.34, blue: 0.20)]
         case .oliloOrange:
             return [.black, Color(red: 0.22, green: 0.10, blue: 0.02), Color(red: 0.52, green: 0.22, blue: 0.04)]
+        case .oliloPink:
+            return [.black, Color(red: 0.23, green: 0.03, blue: 0.16), Color(red: 0.54, green: 0.08, blue: 0.38)]
         }
     }
 
@@ -55,6 +60,7 @@ enum OliloTheme: String, CaseIterable, Identifiable {
         case .oliloRed: return "OliloRedIcon"
         case .oliloGreen: return "OliloGreenIcon"
         case .oliloOrange: return "OliloOrangeIcon"
+        case .oliloPink: return "OliloPinkIcon"
         }
     }
 
@@ -69,6 +75,7 @@ extension Color {
     static let oliloRed = Color(red: 1.0, green: 0.25, blue: 0.32)
     static let oliloGreen = Color(red: 0.18, green: 0.78, blue: 0.44)
     static let oliloOrange = Color(red: 1.0, green: 0.55, blue: 0.18)
+    static let oliloPink = Color(red: 1.0, green: 0.30, blue: 0.72)
 
     static var oliloTheme: Color {
         OliloTheme.selected.accentColor
