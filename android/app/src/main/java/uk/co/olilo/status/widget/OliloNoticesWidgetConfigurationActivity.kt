@@ -35,10 +35,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import uk.co.olilo.status.status.oliloBackgroundBottom
-import uk.co.olilo.status.status.oliloBackgroundMid
-import uk.co.olilo.status.status.oliloBackgroundTop
-import uk.co.olilo.status.status.oliloPurple
+import uk.co.olilo.status.status.OliloTheme
+import uk.co.olilo.status.status.loadOliloTheme
 
 class OliloNoticesWidgetConfigurationActivity : ComponentActivity() {
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -60,6 +58,7 @@ class OliloNoticesWidgetConfigurationActivity : ComponentActivity() {
 
         setContent {
             NoticesWidgetConfigurationScreen(
+                theme = loadOliloTheme(this),
                 onNoticeTypeSelected = { noticeType ->
                     OliloNoticesWidgetProvider.saveNoticeType(this, appWidgetId, noticeType)
                     OliloNoticesWidgetProvider.refreshWidget(
@@ -80,12 +79,12 @@ class OliloNoticesWidgetConfigurationActivity : ComponentActivity() {
 
 /** Renders the incidents-or-maintenance picker used while adding the large widget. */
 @Composable
-private fun NoticesWidgetConfigurationScreen(onNoticeTypeSelected: (String) -> Unit) {
+private fun NoticesWidgetConfigurationScreen(theme: OliloTheme, onNoticeTypeSelected: (String) -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = oliloPurple,
-            background = oliloBackgroundTop,
-            surface = Color(0xD91A1025),
+            primary = theme.accentColor,
+            background = theme.backgroundColors.top,
+            surface = theme.backgroundColors.mid.copy(alpha = 0.85f),
             onSurface = Color.White,
         ),
     ) {
@@ -93,9 +92,9 @@ private fun NoticesWidgetConfigurationScreen(onNoticeTypeSelected: (String) -> U
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.linearGradient(listOf(
-                    oliloBackgroundTop,
-                    oliloBackgroundMid,
-                    oliloBackgroundBottom
+                    theme.backgroundColors.top,
+                    theme.backgroundColors.mid,
+                    theme.backgroundColors.bottom
                 )))
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(20.dp),
@@ -120,9 +119,9 @@ private fun NoticesWidgetConfigurationScreen(onNoticeTypeSelected: (String) -> U
                         .semantics {
                             role = Role.Button
                             contentDescription = "Show $noticeType in the large widget"
-                        },
+                    },
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xB3261737),
+                    color = theme.backgroundColors.mid.copy(alpha = 0.7f),
                     contentColor = Color.White,
                 ) {
                     Row(
@@ -130,7 +129,7 @@ private fun NoticesWidgetConfigurationScreen(onNoticeTypeSelected: (String) -> U
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(noticeType, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = oliloPurple)
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = theme.accentColor)
                     }
                 }
             }

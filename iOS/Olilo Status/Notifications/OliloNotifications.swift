@@ -29,6 +29,7 @@
 
 import Combine
 import Foundation
+import OSLog
 import UIKit
 import UserNotifications
 
@@ -230,7 +231,8 @@ final class PushAppDelegate: NSObject, UIApplicationDelegate, UNUserNotification
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        print("APNs registration failed: \(error.localizedDescription)")
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "uk.co.olilo.status", category: "PushNotifications")
+            .error("APNs registration failed: \(error.localizedDescription, privacy: .public)")
     }
 
     /// Show banners while the app is in the foreground.

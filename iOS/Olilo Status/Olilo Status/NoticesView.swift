@@ -170,9 +170,9 @@ struct NoticesView: View {
                         model.hidesNoticesOlderThan30Days.toggle()
                     } label: {
                         Image(systemName: model.hidesNoticesOlderThan30Days ? "eye.slash" : "eye")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel(
                         model.hidesNoticesOlderThan30Days
                         ? "Show notices older than 30 days"
@@ -184,10 +184,10 @@ struct NoticesView: View {
                         Task { await model.refresh() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .disabled(model.isLoading)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Refresh notices")
                 }
             }
@@ -320,18 +320,18 @@ private struct NoticeHistoryCard: View {
                     } label: {
                         Label("\(notice.updates.count) update\(notice.updates.count == 1 ? "" : "s")", systemImage: "list.bullet.rectangle")
                             .font(.callout.weight(.medium))
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                 }
 
                 if let link = notice.link {
                     Link(destination: link) {
                         Label("Open notice", systemImage: "arrow.up.forward.square")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .font(.callout.weight(.medium))
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                 }
             }
         }
@@ -359,7 +359,7 @@ private struct ExpandableNoticeDescription: View {
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.oliloPurple)
+            .foregroundStyle(Color.oliloTheme)
             .accessibilityLabel(isExpanded ? "Collapse description" : "Expand description")
             .accessibilityHint(isExpanded ? "Hides the full description" : "Shows the full description")
         }
@@ -376,7 +376,7 @@ private struct NoticeTitleRow: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: systemImage)
                 .font(.headline)
-                .foregroundStyle(Color.oliloPurple)
+                .foregroundStyle(Color.oliloTheme)
                 .frame(width: 24)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {

@@ -2,11 +2,16 @@ package uk.co.olilo.status.main
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Process
+import android.webkit.CookieManager
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
@@ -23,16 +28,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -86,12 +92,17 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -99,6 +110,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,6 +120,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -129,9 +142,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
+import kotlin.system.exitProcess
 import uk.co.olilo.status.status.Incident
 import uk.co.olilo.status.status.Maintenance
 import uk.co.olilo.status.status.NoticeKind
@@ -147,13 +164,16 @@ import uk.co.olilo.status.status.groupedComponents
 import uk.co.olilo.status.notifications.NotificationPreferences
 import uk.co.olilo.status.notifications.NotificationStore
 import uk.co.olilo.status.notifications.OliloNotifications
-import uk.co.olilo.status.status.oliloBackgroundBottom
-import uk.co.olilo.status.status.oliloBackgroundMid
-import uk.co.olilo.status.status.oliloBackgroundTop
-import uk.co.olilo.status.status.oliloPurple
+import uk.co.olilo.status.status.OliloTheme
 import uk.co.olilo.status.status.readableStatus
+import uk.co.olilo.status.status.loadOliloTheme
+import uk.co.olilo.status.status.saveOliloTheme
 import uk.co.olilo.status.status.statusColor
 import uk.co.olilo.status.status.statusSeverity
+import uk.co.olilo.status.iperf.AndroidIperfCallback
+import uk.co.olilo.status.iperf.AndroidIperfRunner
+import uk.co.olilo.status.widget.OliloNoticesWidgetProvider
+import uk.co.olilo.status.widget.OliloStatusWidgetProvider
 import androidx.core.content.edit
 import androidx.core.net.toUri
 
@@ -165,8 +185,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         launchRequest = launchRequest.copy(route = intent.requestedRoute())
         setContent {
-            OliloStatusTheme {
-                OliloApp(launchRequest)
+            var selectedTheme by remember { mutableStateOf(loadOliloTheme(this@MainActivity)) }
+            OliloStatusTheme(selectedTheme) {
+                OliloApp(
+                    launchRequest = launchRequest,
+                    onThemeSelected = { theme ->
+                        val didSave = saveOliloTheme(this@MainActivity, theme)
+                        if (didSave) {
+                            selectedTheme = theme
+                            refreshOliloWidgets(this@MainActivity)
+                        }
+                        didSave
+                    },
+                )
             }
         }
     }
@@ -186,9 +217,12 @@ class MainActivity : ComponentActivity() {
 
 private data class LaunchRequest(val route: String, val nonce: Int)
 
+private val LocalOliloTheme = staticCompositionLocalOf { OliloTheme.OliloPurple }
+
 private enum class Route(val path: String, val label: String, val icon: ImageVector) {
     Status("status", "Status", Icons.Filled.Dashboard),
     Notices("notices", "Notices", Icons.Filled.Notifications),
+    Speedtest("speedtest", "Speedtest", Icons.Filled.Terminal),
     Settings("settings", "Settings", Icons.Filled.Settings),
 }
 
@@ -200,11 +234,16 @@ private fun Intent?.requestedRoute(): String = when (this?.getStringExtra(MainAc
 
 /** Hosts the tab navigation shell and applies launch requests from notifications. */
 @Composable
-private fun OliloApp(launchRequest: LaunchRequest) {
+private fun OliloApp(
+    launchRequest: LaunchRequest,
+    onThemeSelected: (OliloTheme) -> Boolean,
+) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+    val usesFoldableLayout = configuration.screenWidthDp >= 600
     // Keep onboarding presentation at the app shell so first launch and Settings replay share one flow.
     var hasCompletedOnboarding by remember { mutableStateOf(loadHasCompletedOnboarding(context)) }
     var showOnboarding by remember { mutableStateOf(!hasCompletedOnboarding) }
@@ -231,43 +270,32 @@ private fun OliloApp(launchRequest: LaunchRequest) {
             contentColor = Color.White,
             contentWindowInsets = WindowInsets(0.dp),
             bottomBar = {
-                if (Route.entries.any { it.path == currentRoute }) {
-                    NavigationBar(containerColor = Color(0xF20B0612)) {
-                        Route.entries.forEach { route ->
-                            NavigationBarItem(
-                                selected = currentRoute == route.path,
-                                onClick = {
-                                    navController.navigate(route.path) {
-                                        popUpTo(Route.Status.path)
-                                        launchSingleTop = true
-                                    }
-                                },
-                                icon = { Icon(route.icon, contentDescription = route.label) },
-                                label = { Text(route.label) },
-                            )
-                        }
-                    }
+                if (!usesFoldableLayout && Route.entries.any { it.path == currentRoute }) {
+                    OliloBottomNavigationBar(currentRoute, navController)
                 }
             },
         ) { padding ->
-            NavHost(
-                navController = navController,
-                startDestination = Route.Status.path,
-                modifier = Modifier.padding(padding),
-            ) {
-                composable(Route.Status.path) { StatusScreen(navController) }
-                composable(Route.Notices.path) { NoticesScreen(navController) }
-                composable(Route.Settings.path) { SettingsScreen(navController) }
-                composable("notification-settings") { NotificationSettingsScreen(navController) }
-                composable("credits") { CreditsPage(navController) }
-                composable("contact") { ContactUsPage(navController) }
-                composable("web/{title}/{url}") { entry ->
-                    WebPage(
+            if (usesFoldableLayout && Route.entries.any { it.path == currentRoute }) {
+                Row(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize(),
+                ) {
+                    OliloFoldableNavigationRail(currentRoute, navController)
+                    OliloNavHost(
                         navController = navController,
-                        title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
-                        url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+                        onThemeSelected = onThemeSelected,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                 }
+            } else {
+                OliloNavHost(
+                    navController = navController,
+                    onThemeSelected = onThemeSelected,
+                    modifier = Modifier.padding(padding),
+                )
             }
         }
 
@@ -282,14 +310,114 @@ private fun OliloApp(launchRequest: LaunchRequest) {
     }
 }
 
+@Composable
+private fun OliloNavHost(
+    navController: NavHostController,
+    onThemeSelected: (OliloTheme) -> Boolean,
+    modifier: Modifier = Modifier,
+) {
+    NavHost(
+        navController = navController,
+        startDestination = Route.Status.path,
+        modifier = modifier,
+    ) {
+        composable(Route.Status.path) { StatusScreen(navController) }
+        composable(Route.Notices.path) { NoticesScreen(navController) }
+        composable(Route.Speedtest.path) { SpeedtestScreen() }
+        composable(Route.Settings.path) { SettingsScreen(navController) }
+        composable("notification-settings") { NotificationSettingsScreen(navController) }
+        composable("appearance-settings") { AppearanceSettingsScreen(navController, onThemeSelected) }
+        composable("credits") { CreditsPage(navController) }
+        composable("contact") { ContactUsPage(navController) }
+        composable("web/{title}/{url}") { entry ->
+            WebPage(
+                navController = navController,
+                title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
+                url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+            )
+        }
+        composable("iframe/{title}/{url}") { entry ->
+            IframePage(
+                navController = navController,
+                title = Uri.decode(entry.arguments?.getString("title").orEmpty()),
+                url = Uri.decode(entry.arguments?.getString("url").orEmpty()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OliloBottomNavigationBar(currentRoute: String?, navController: NavHostController) {
+    val theme = LocalOliloTheme.current
+    NavigationBar(containerColor = themedNavigationBarColor()) {
+        Route.entries.forEach { route ->
+            NavigationBarItem(
+                selected = currentRoute == route.path,
+                onClick = { navController.navigateRootRoute(route) },
+                icon = { Icon(route.icon, contentDescription = route.label) },
+                label = { Text(route.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = theme.accentColor,
+                    selectedTextColor = theme.accentColor,
+                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
+                    unselectedIconColor = Color(0xFFE2D8EA),
+                    unselectedTextColor = Color(0xFFE2D8EA),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun OliloFoldableNavigationRail(currentRoute: String?, navController: NavHostController) {
+    val theme = LocalOliloTheme.current
+    NavigationRail(
+        containerColor = themedNavigationBarColor(),
+        contentColor = Color.White,
+        modifier = Modifier.fillMaxHeight(),
+    ) {
+        Spacer(Modifier.height(24.dp))
+        Route.entries.forEach { route ->
+            NavigationRailItem(
+                selected = currentRoute == route.path,
+                onClick = { navController.navigateRootRoute(route) },
+                icon = { Icon(route.icon, contentDescription = route.label) },
+                label = { Text(route.label) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = theme.accentColor,
+                    selectedTextColor = theme.accentColor,
+                    indicatorColor = theme.accentColor.copy(alpha = 0.22f),
+                    unselectedIconColor = Color(0xFFE2D8EA),
+                    unselectedTextColor = Color(0xFFE2D8EA),
+                ),
+            )
+        }
+    }
+}
+
+private fun NavHostController.navigateRootRoute(route: Route) {
+    navigate(route.path) {
+        popUpTo(Route.Status.path)
+        launchSingleTop = true
+    }
+}
+
 /** Navigates to the in-app WebView route with URL-safe arguments. */
 private fun NavHostController.openWeb(title: String, url: String) {
     navigate("web/${Uri.encode(title)}/${Uri.encode(url)}")
 }
 
+private fun NavHostController.openIframe(title: String, url: String) {
+    navigate("iframe/${Uri.encode(title)}/${Uri.encode(url)}")
+}
+
 // Stored separately from component preferences so onboarding can be reset independently if needed.
 private const val ONBOARDING_PREFERENCES_NAME = "onboarding_preferences"
 private const val HAS_COMPLETED_ONBOARDING_KEY = "has_completed_onboarding"
+private const val SPEEDTEST_PREFERENCES_NAME = "speedtest_preferences"
+private const val SPEEDTEST_RUN_TIMESTAMPS_KEY = "speedtest_run_timestamps"
+private const val SPEEDTEST_MAX_RUNS_PER_HOUR = 3
+private const val SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS = 60 * 60 * 1000L
 
 /** Loads whether the first-run onboarding tutorial has been completed. */
 private fun loadHasCompletedOnboarding(context: Context): Boolean =
@@ -301,6 +429,59 @@ private fun saveHasCompletedOnboarding(context: Context, hasCompleted: Boolean) 
     context.getSharedPreferences(ONBOARDING_PREFERENCES_NAME, Context.MODE_PRIVATE)
         .edit {
             putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
+        }
+}
+
+private fun loadSpeedtestRunTimestamps(context: Context): List<Long> =
+    context.getSharedPreferences(SPEEDTEST_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .getString(SPEEDTEST_RUN_TIMESTAMPS_KEY, "")
+        .orEmpty()
+        .split(",")
+        .mapNotNull { it.toLongOrNull() }
+
+private fun saveSpeedtestRunTimestamps(context: Context, timestamps: List<Long>) {
+    context.getSharedPreferences(SPEEDTEST_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .edit {
+            putString(SPEEDTEST_RUN_TIMESTAMPS_KEY, timestamps.joinToString(","))
+        }
+}
+
+private fun recentSpeedtestRunTimestamps(
+    timestamps: List<Long>,
+    nowMillis: Long = System.currentTimeMillis(),
+): List<Long> =
+    timestamps
+        .filter { it > nowMillis - SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS }
+        .sorted()
+
+private fun speedtestRateLimitMessage(
+    timestamps: List<Long>,
+    nowMillis: Long = System.currentTimeMillis(),
+): String? {
+    val recentRuns = recentSpeedtestRunTimestamps(timestamps, nowMillis)
+    if (recentRuns.size < SPEEDTEST_MAX_RUNS_PER_HOUR) return null
+    val nextRunMillis = recentRuns.first() + SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS
+    val minutesRemaining = ((nextRunMillis - nowMillis + 59_999L) / 60_000L).coerceAtLeast(1)
+    return "Speedtest limit reached. You can run 3 tests per hour. Try again in $minutesRemaining min."
+}
+
+/** Closes the task and terminates the process after a setting requires a cold start. */
+private fun closeAppForRestart(context: Context) {
+    (context as? ComponentActivity)?.finishAffinity()
+    Process.killProcess(Process.myPid())
+    exitProcess(0)
+}
+
+/** Forces existing widgets to redraw after theme preferences change. */
+private fun refreshOliloWidgets(context: Context) {
+    val appWidgetManager = AppWidgetManager.getInstance(context)
+    appWidgetManager.getAppWidgetIds(ComponentName(context, OliloStatusWidgetProvider::class.java))
+        .forEach { appWidgetId ->
+            OliloStatusWidgetProvider.refreshWidget(context, appWidgetManager, appWidgetId)
+        }
+    appWidgetManager.getAppWidgetIds(ComponentName(context, OliloNoticesWidgetProvider::class.java))
+        .forEach { appWidgetId ->
+            OliloNoticesWidgetProvider.refreshWidget(context, appWidgetManager, appWidgetId)
         }
 }
 
@@ -391,7 +572,7 @@ private fun OnboardingScreen(
                     Icon(
                         page.icon,
                         contentDescription = null,
-                        tint = oliloPurple,
+                        tint = LocalOliloTheme.current.accentColor,
                         modifier = Modifier.size(72.dp),
                     )
                     Column(
@@ -418,7 +599,7 @@ private fun OnboardingScreen(
                                     Icon(
                                         Icons.Filled.CheckCircle,
                                         contentDescription = null,
-                                        tint = oliloPurple,
+                                        tint = LocalOliloTheme.current.accentColor,
                                         modifier = Modifier
                                             .padding(top = 2.dp)
                                             .size(20.dp),
@@ -476,7 +657,7 @@ private fun OnboardingPageIndicator(selectedPage: Int, pageCount: Int) {
                 modifier = Modifier
                     .size(if (index == selectedPage) 10.dp else 8.dp)
                     .clip(CircleShape)
-                    .background(if (index == selectedPage) oliloPurple else Color(0x66CEC1D8)),
+                    .background(if (index == selectedPage) LocalOliloTheme.current.accentColor else Color(0x66CEC1D8)),
             )
         }
     }
@@ -484,33 +665,75 @@ private fun OnboardingPageIndicator(selectedPage: Int, pageCount: Int) {
 
 /** Applies the dark Olilo Material theme to app content. */
 @Composable
-private fun OliloStatusTheme(content: @Composable () -> Unit) {
+private fun OliloStatusTheme(theme: OliloTheme, content: @Composable () -> Unit) {
     val colorScheme = darkColorScheme(
-        primary = oliloPurple,
+        primary = theme.accentColor,
         secondary = Color(0xFF64B5F6),
-        background = oliloBackgroundTop,
-        surface = Color(0xD91A1025),
-        surfaceVariant = Color(0xE6261737),
+        background = theme.backgroundColors.top,
+        surface = theme.backgroundColors.mid.copy(alpha = 0.85f),
+        surfaceVariant = theme.backgroundColors.mid.copy(alpha = 0.9f),
         onPrimary = Color.White,
         onSurface = Color.White,
         onSurfaceVariant = Color(0xFFE2D8EA),
     )
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    CompositionLocalProvider(LocalOliloTheme provides theme) {
+        MaterialTheme(colorScheme = colorScheme, content = content)
+    }
 }
 
 /** Draws the shared full-screen gradient behind app content. */
 @Composable
 private fun GradientBackground(content: @Composable () -> Unit) {
+    val theme = LocalOliloTheme.current
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    listOf(oliloBackgroundTop, oliloBackgroundMid, oliloBackgroundBottom),
+                    listOf(
+                        theme.backgroundColors.top,
+                        theme.backgroundColors.mid,
+                        theme.backgroundColors.bottom,
+                    ),
                 ),
             ),
     ) {
         content()
+    }
+}
+
+@Composable
+private fun themedStatusColor(status: String): Color =
+    statusColor(status)
+
+@Composable
+private fun themedCardColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.7f)
+
+@Composable
+private fun themedChipColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.35f)
+
+@Composable
+private fun themedDialogColor(): Color =
+    LocalOliloTheme.current.backgroundColors.mid.copy(alpha = 0.95f)
+
+@Composable
+private fun themedNavigationBarColor(): Color =
+    LocalOliloTheme.current.backgroundColors.top.copy(alpha = 0.95f)
+
+@Composable
+private fun usesFoldableContentLayout(): Boolean =
+    LocalConfiguration.current.screenWidthDp >= 600
+
+@Composable
+private fun FoldableContentRow(
+    first: @Composable () -> Unit,
+    second: @Composable () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Box(Modifier.weight(1f)) { first() }
+        Box(Modifier.weight(1f)) { second() }
     }
 }
 
@@ -544,7 +767,7 @@ private fun OliloTopBar(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = oliloPurple,
+                    tint = LocalOliloTheme.current.accentColor,
                 )
             }
         } else if (onConfigure != null) {
@@ -555,7 +778,7 @@ private fun OliloTopBar(
                 Icon(
                     leadingIcon,
                     contentDescription = leadingContentDescription,
-                    tint = oliloPurple,
+                    tint = LocalOliloTheme.current.accentColor,
                 )
             }
         }
@@ -573,7 +796,7 @@ private fun OliloTopBar(
                     Icon(
                         Icons.Filled.Refresh,
                         contentDescription = "Refresh",
-                        tint = oliloPurple,
+                        tint = LocalOliloTheme.current.accentColor,
                     )
                 }
             }
@@ -595,8 +818,8 @@ private fun OpenUrlButton(
         leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
         colors = AssistChipDefaults.assistChipColors(
             labelColor = Color.White,
-            leadingIconContentColor = oliloPurple,
-            containerColor = Color(0x332B1C3D),
+            leadingIconContentColor = LocalOliloTheme.current.accentColor,
+            containerColor = themedChipColor(),
         ),
     )
 }
@@ -608,7 +831,7 @@ private fun StatusCard(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xB3261737),
+            containerColor = themedCardColor(),
             contentColor = Color.White,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -652,7 +875,7 @@ private fun LoadingOrError(
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             isLoading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = oliloPurple)
+                CircularProgressIndicator(color = LocalOliloTheme.current.accentColor)
                 Spacer(Modifier.height(12.dp))
                 Text(loadingText)
             }
@@ -798,6 +1021,7 @@ private fun String.referencesComponentName(componentName: String): Boolean {
 private fun StatusScreen(navController: NavHostController, viewModel: StatusViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val usesFoldableLayout = usesFoldableContentLayout()
     var displayPreferences by remember { mutableStateOf(loadComponentDisplayPreferences(context)) }
     var showComponentEditor by remember { mutableStateOf(false) }
 
@@ -830,6 +1054,7 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
         val visibleIncidents = visibleIncidents(state.incidents, state.components, displayPreferences)
         val visibleComponentCount = visibleComponentGroups.sumOf { it.allComponents.size }
         val visibleStatus = visibleStatus(state.components, displayPreferences)
+        val hasNoActiveStatusItems = visibleAffected.isEmpty() && visibleIncidents.isEmpty() && state.maintenances.isEmpty()
 
         if (showComponentEditor) {
             ComponentDisplayEditorDialog(
@@ -845,18 +1070,37 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             state.summary?.let { summary ->
-                item {
-                    OverviewCard(
-                        summary = summary,
-                        state = state,
-                        displayStatus = visibleStatus,
-                        componentCount = visibleComponentCount,
-                        affectedCount = visibleAffected.size,
-                        incidentCount = visibleIncidents.size,
-                        navController = navController,
-                    )
+                if (usesFoldableLayout) {
+                    item {
+                        FoldableContentRow(
+                            first = {
+                                OverviewCard(
+                                    summary = summary,
+                                    state = state,
+                                    displayStatus = visibleStatus,
+                                    componentCount = visibleComponentCount,
+                                    affectedCount = visibleAffected.size,
+                                    incidentCount = visibleIncidents.size,
+                                    navController = navController,
+                                )
+                            },
+                            second = { StatusLinksCard(navController) },
+                        )
+                    }
+                } else {
+                    item {
+                        OverviewCard(
+                            summary = summary,
+                            state = state,
+                            displayStatus = visibleStatus,
+                            componentCount = visibleComponentCount,
+                            affectedCount = visibleAffected.size,
+                            incidentCount = visibleIncidents.size,
+                            navController = navController,
+                        )
+                    }
+                    item { StatusLinksCard(navController) }
                 }
-                item { StatusLinksCard(navController) }
                 if (visibleAffected.isNotEmpty()) {
                     item { SectionHeader("Affected Services", visibleAffected.size) }
                     item {
@@ -866,6 +1110,9 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
                             }
                         }
                     }
+                } else if (hasNoActiveStatusItems) {
+                    item { SectionHeader("Current Activity", 0) }
+                    item { EmptyActiveStatusCard() }
                 }
             }
 
@@ -896,6 +1143,40 @@ private fun StatusScreen(navController: NavHostController, viewModel: StatusView
     }
 }
 
+/** Shows a friendly empty state when there are no active status issues. */
+@Composable
+private fun EmptyActiveStatusCard() {
+    StatusCard {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                Icons.Filled.CheckCircle,
+                contentDescription = null,
+                tint = themedStatusColor("OPERATIONAL"),
+                modifier = Modifier.size(28.dp),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "${statusTimeGreeting()}, everything is running normally",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "No incidents, maintenance, or affected services are active right now.",
+                    color = Color(0xFFCEC1D8),
+                )
+            }
+        }
+    }
+}
+
+/** Returns a simple local-time greeting for the status empty state. */
+private fun statusTimeGreeting(now: LocalTime = LocalTime.now()): String = when (now.hour) {
+    in 5..11 -> "Good morning"
+    in 12..16 -> "Good afternoon"
+    else -> "Good evening"
+}
+
 /** Displays quick links to Olilo operational tools. */
 @Composable
 private fun StatusLinksCard(navController: NavHostController) {
@@ -907,9 +1188,9 @@ private fun StatusLinksCard(navController: NavHostController) {
                     icon = Icons.Filled.Dashboard,
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        navController.openWeb(
+                        navController.openIframe(
                             "Dashboard",
-                            "https://stats.olilo.co.uk/",
+                            "https://dashboard.as212683.net/d/olilo-public-status/overview?orgId=2&from=now-24h&to=now&timezone=browser&refresh=1m&kiosk=1",
                         )
                     },
                 )
@@ -1008,7 +1289,7 @@ private fun ComponentDisplayEditorDialog(
                 Text("Show All")
             }
         },
-        containerColor = Color(0xF2261737),
+        containerColor = themedDialogColor(),
         titleContentColor = Color.White,
         textContentColor = Color.White,
     )
@@ -1045,10 +1326,10 @@ private fun ComponentDisplayEditorRow(
             )
         }
         IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${component.name} up", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move ${component.name} up", tint = LocalOliloTheme.current.accentColor)
         }
         IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${component.name} down", tint = oliloPurple)
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move ${component.name} down", tint = LocalOliloTheme.current.accentColor)
         }
         Switch(
             checked = isVisible,
@@ -1073,7 +1354,7 @@ private fun componentEditorDetail(component: StatusComponent): String = buildLis
 private fun EmptyComponentsCard() {
     StatusCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = oliloPurple)
+            Icon(Icons.Filled.VisibilityOff, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
             Text("No components shown", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             Text("Use the component editor to show services on this page.", color = Color(0xFFCEC1D8))
         }
@@ -1146,7 +1427,7 @@ difference of accessibilty settings. Will be enabled regardless of settings. */
 /** Displays the animated status icon used by the overview card. */
 @Composable
 private fun PulsingStatusIcon(status: String) {
-    val color = statusColor(status)
+    val color = themedStatusColor(status)
     val readable = readableStatus(status)
     val icon = if (statusSeverity(status) == 0) Icons.Filled.CheckCircle else Icons.Filled.Error
     val transition = rememberInfiniteTransition(label = "Status icon pulse")
@@ -1195,7 +1476,7 @@ private fun MetricTile(title: String, value: String, modifier: Modifier = Modifi
                 contentDescription = "$title: $value"
             },
         shape = RoundedCornerShape(14.dp),
-        color = Color(0x592B1C3D),
+        color = themedChipColor(),
         contentColor = Color.White,
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.SpaceBetween) {
@@ -1273,6 +1554,7 @@ private fun ComponentRow(component: StatusComponent, showGroup: Boolean) {
 @Composable
 private fun NoticesScreen(navController: NavHostController, viewModel: NoticesViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val usesFoldableLayout = usesFoldableContentLayout()
     val filtered = state.notices
         .filter { notice -> state.selectedKind == null || notice.kind == state.selectedKind }
         .filter { notice -> !state.hideOldNotices || !notice.isOlderThan30Days() }
@@ -1305,23 +1587,61 @@ private fun NoticesScreen(navController: NavHostController, viewModel: NoticesVi
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             val activeCount = state.activeIncidents.size + state.activeMaintenances.size
-            if (activeCount > 0) {
-                item { SectionHeader("Current Notices", activeCount) }
-                items(state.activeIncidents, key = { "current-incident-${it.id}" }) { ActiveIncidentNoticeCard(it, navController) }
-                items(state.activeMaintenances, key = { "current-maintenance-${it.id}" }) { ActiveMaintenanceNoticeCard(it, navController) }
-            }
-
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
-                    NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") { viewModel.selectKind(
-                        NoticeKind.Incident) }
-                    NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") { viewModel.selectKind(
-                        NoticeKind.Maintenance) }
+            if (usesFoldableLayout) {
+                item {
+                    FoldableContentRow(
+                        first = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                if (activeCount > 0) {
+                                    SectionHeader("Current Notices", activeCount)
+                                    state.activeIncidents.forEach { ActiveIncidentNoticeCard(it, navController) }
+                                    state.activeMaintenances.forEach { ActiveMaintenanceNoticeCard(it, navController) }
+                                } else {
+                                    SectionHeader("Current Notices", activeCount)
+                                    EmptyActiveNoticesCard()
+                                }
+                                StatusCard {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
+                                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") {
+                                            viewModel.selectKind(NoticeKind.Incident)
+                                        }
+                                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") {
+                                            viewModel.selectKind(NoticeKind.Maintenance)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        second = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SectionHeader("Notice History", filtered.size)
+                                filtered.forEach { NoticeHistoryCard(it, navController) }
+                            }
+                        },
+                    )
                 }
+            } else {
+                if (activeCount > 0) {
+                    item { SectionHeader("Current Notices", activeCount) }
+                    items(state.activeIncidents, key = { "current-incident-${it.id}" }) { ActiveIncidentNoticeCard(it, navController) }
+                    items(state.activeMaintenances, key = { "current-maintenance-${it.id}" }) { ActiveMaintenanceNoticeCard(it, navController) }
+                }
+
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NoticeFilterChip(selected = state.selectedKind == null, label = "All") { viewModel.selectKind(null) }
+                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Incident, label = "Incident") {
+                            viewModel.selectKind(NoticeKind.Incident)
+                        }
+                        NoticeFilterChip(selected = state.selectedKind == NoticeKind.Maintenance, label = "Maintenance") {
+                            viewModel.selectKind(NoticeKind.Maintenance)
+                        }
+                    }
+                }
+                item { SectionHeader("Notice History", filtered.size) }
+                items(filtered, key = { "history-notice-${it.id}" }) { NoticeHistoryCard(it, navController) }
             }
-            item { SectionHeader("Notice History", filtered.size) }
-            items(filtered, key = { "history-notice-${it.id}" }) { NoticeHistoryCard(it, navController) }
         }
     }
 }
@@ -1331,6 +1651,18 @@ private fun StatusNotice.isOlderThan30Days(now: Instant = Instant.now()): Boolea
     val timestamp = updated ?: published ?: return false
     val noticeDate = runCatching { Instant.parse(timestamp) }.getOrNull() ?: return false
     return noticeDate.isBefore(now.minus(30, ChronoUnit.DAYS))
+}
+
+/** Shows the empty state for the foldable active notices pane. */
+@Composable
+private fun EmptyActiveNoticesCard() {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Icon(Icons.Filled.Notifications, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
+            Text("No current active notices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text("New incidents and maintenance will appear here.", color = Color(0xFFCEC1D8))
+        }
+    }
 }
 
 /** Renders an active incident notice card. */
@@ -1363,8 +1695,8 @@ private fun NoticeFilterChip(selected: Boolean, label: String, onClick: () -> Un
         colors = FilterChipDefaults.filterChipColors(
             labelColor = Color.White,
             selectedLabelColor = Color.White,
-            containerColor = Color(0x332B1C3D),
-            selectedContainerColor = oliloPurple.copy(alpha = 0.35f),
+            containerColor = themedChipColor(),
+            selectedContainerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.35f),
         ),
     )
 }
@@ -1385,7 +1717,7 @@ private fun ExpandableDescription(text: String, collapsedLines: Int = 4) {
             label = { Text(if (expanded) "Show less" else "Show more") },
             colors = AssistChipDefaults.assistChipColors(
                 labelColor = Color.White,
-                containerColor = Color(0x332B1C3D),
+                containerColor = themedChipColor(),
             ),
         )
     }
@@ -1442,23 +1774,23 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         updates.forEach { update ->
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(update.status, color = statusColor(update.status), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                                Text(update.status, color = themedStatusColor(update.status), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
                                 Text(update.message, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
                             }
                         }
                     }
                 }
             }
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 AssistChip(
                     onClick = { descriptionExpanded = !descriptionExpanded },
                     label = { Text(if (descriptionExpanded) "Show less" else "Show more") },
                     colors = AssistChipDefaults.assistChipColors(
                         labelColor = Color.White,
-                        containerColor = Color(0x332B1C3D),
+                        containerColor = themedChipColor(),
                     ),
                 )
                 notice.updates.takeIf { it.isNotEmpty() }?.let { updates ->
@@ -1467,7 +1799,7 @@ private fun NoticeHistoryCard(notice: StatusNotice, navController: NavHostContro
                         label = { Text("${updates.size} update${if (updates.size == 1) "" else "s"}") },
                         colors = AssistChipDefaults.assistChipColors(
                             labelColor = Color.White,
-                            containerColor = oliloPurple.copy(alpha = 0.25f),
+                            containerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.25f),
                         ),
                     )
                 }
@@ -1486,7 +1818,7 @@ private fun NoticeTitleRow(title: String, subtitle: String, icon: ImageVector, s
             contentDescription = "$title, $subtitle, ${readableStatus(status)}"
         },
     ) {
-        Icon(icon, contentDescription = null, tint = oliloPurple, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor, modifier = Modifier.size(24.dp))
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -1522,7 +1854,7 @@ private fun StatusDot(status: String, size: Int) {
         Modifier
             .size(size.dp)
             .clip(CircleShape)
-            .background(statusColor(status)),
+            .background(themedStatusColor(status)),
     )
 }
 
@@ -1531,12 +1863,12 @@ private fun StatusDot(status: String, size: Int) {
 private fun StatusBadge(text: String, status: String) {
     Surface(
         shape = RoundedCornerShape(50),
-        color = statusColor(status).copy(alpha = 0.16f),
-        contentColor = statusColor(status),
+        color = themedStatusColor(status).copy(alpha = 0.16f),
+        contentColor = themedStatusColor(status),
     ) {
         Text(
             text,
-            color = statusColor(status),
+            color = themedStatusColor(status),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
@@ -1560,10 +1892,590 @@ private fun DetailRows(rows: List<Pair<String, String?>>) {
     }
 }
 
+private enum class SpeedtestMode(val label: String) {
+    Upload("Upload"),
+    Download("Download"),
+    MultiUpload("Multi-Stream Upload"),
+    MultiDownload("Multi-Stream Download"),
+}
+
+/** Renders the iperf3 speedtest setup surface. */
+@Composable
+private fun SpeedtestScreen() {
+    val context = LocalContext.current
+    val server = "speedtest.as212683.net"
+    val ports = (5201..5210).toList()
+    val streamOptions = listOf(1, 8, 16, 32)
+    val durationOptions = listOf(5, 10)
+    var selectedMode by remember { mutableStateOf(SpeedtestMode.Download) }
+    var selectedPort by remember { mutableIntStateOf(5201) }
+    var selectedStreams by remember { mutableIntStateOf(8) }
+    var selectedDuration by remember { mutableIntStateOf(10) }
+    var speedtestState by remember { mutableStateOf<AndroidSpeedtestState>(AndroidSpeedtestState.Ready) }
+    var currentSpeedtestResult by remember { mutableStateOf<AndroidSpeedtestResult?>(null) }
+    var speedtestRunTimestamps by remember { mutableStateOf(loadSpeedtestRunTimestamps(context)) }
+    val coroutineScope = rememberCoroutineScope()
+    val usesMultiStream = selectedMode == SpeedtestMode.MultiUpload || selectedMode == SpeedtestMode.MultiDownload
+    val isRunning = speedtestState is AndroidSpeedtestState.Running
+    val rateLimitMessage = speedtestRateLimitMessage(speedtestRunTimestamps)
+    val usesFoldableLayout = usesFoldableContentLayout()
+
+    val runSpeedtest: () -> Unit = {
+        val recentRuns = recentSpeedtestRunTimestamps(speedtestRunTimestamps)
+        if (recentRuns.size >= SPEEDTEST_MAX_RUNS_PER_HOUR) {
+            speedtestRunTimestamps = recentRuns
+            saveSpeedtestRunTimestamps(context, recentRuns)
+        } else {
+            val updatedRuns = recentRuns + System.currentTimeMillis()
+            speedtestRunTimestamps = updatedRuns
+            saveSpeedtestRunTimestamps(context, updatedRuns)
+            currentSpeedtestResult = null
+            speedtestState = AndroidSpeedtestState.Running
+            coroutineScope.launch {
+                speedtestState = runAndroidSpeedtest(
+                    server = server,
+                    port = selectedPort,
+                    duration = selectedDuration,
+                    streams = selectedStreams,
+                    mode = selectedMode,
+                    onProgress = { result ->
+                        coroutineScope.launch {
+                            currentSpeedtestResult = result
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun SpeedtestIntroCard() {
+        StatusCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Olilo Public Speed Test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Test directly against the Olilo network. Please use responsibly, abuse will result in the speedtest being removed from Olilo Status.",
+                    color = Color(0xFFCEC1D8),
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun SpeedtestRunCard() {
+        AndroidSpeedtestRunnerCard(
+            state = speedtestState,
+            liveResult = currentSpeedtestResult,
+            rateLimitMessage = rateLimitMessage,
+            canStart = rateLimitMessage == null,
+            onRun = runSpeedtest,
+        )
+    }
+
+    @Composable
+    fun SpeedtestSettingsCard() {
+        SpeedtestConfigurationCard(
+            selectedMode = selectedMode,
+            selectedPort = selectedPort,
+            selectedStreams = selectedStreams,
+            selectedDuration = selectedDuration,
+            isRunning = isRunning,
+            usesMultiStream = usesMultiStream,
+            ports = ports,
+            streamOptions = streamOptions,
+            durationOptions = durationOptions,
+            onModeSelected = { selectedMode = it },
+            onPortSelected = { selectedPort = it },
+            onStreamsSelected = { selectedStreams = it },
+            onDurationSelected = { selectedDuration = it },
+        )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = "Speedtest")
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (usesFoldableLayout) {
+                item {
+                    FoldableContentRow(
+                        first = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SpeedtestIntroCard()
+                                SpeedtestRunCard()
+                            }
+                        },
+                        second = {
+                            SpeedtestSettingsCard()
+                        },
+                    )
+                }
+            } else {
+                item {
+                    SpeedtestIntroCard()
+                }
+
+                item {
+                    SpeedtestRunCard()
+                }
+
+                item {
+                    SpeedtestSettingsCard()
+                }
+            }
+        }
+    }
+}
+
+private sealed interface AndroidSpeedtestState {
+    data object Ready : AndroidSpeedtestState
+    data object Running : AndroidSpeedtestState
+    data class Finished(val result: AndroidSpeedtestResult) : AndroidSpeedtestState
+    data class Error(val message: String) : AndroidSpeedtestState
+}
+
+private data class AndroidSpeedtestResult(
+    val throughput: String,
+    val transferred: String,
+    val duration: String,
+    val streams: String,
+)
+
+/** Runs the Android JNI iperf wrapper off the main thread. */
+private suspend fun runAndroidSpeedtest(
+    server: String,
+    port: Int,
+    duration: Int,
+    streams: Int,
+    mode: SpeedtestMode,
+    onProgress: (AndroidSpeedtestResult) -> Unit,
+): AndroidSpeedtestState = withContext(Dispatchers.IO) {
+    val output = StringBuffer()
+    var errorMessage: String? = null
+    val arguments = buildAndroidIperfArguments(
+        server = server,
+        port = port,
+        duration = duration,
+        streams = streams,
+        mode = mode,
+    )
+    try {
+        AndroidIperfRunner.runIperfLive(
+            arguments,
+            object : AndroidIperfCallback {
+                override fun onOutput(line: String) {
+                    output.append(line)
+                    parseAndroidIperfResult(
+                        output = output.toString(),
+                        streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams else 1,
+                    )?.let(onProgress)
+                }
+
+                override fun onError(error: String) {
+                    errorMessage = error
+                }
+
+                override fun onComplete() {
+                    // Completion is handled after the blocking native call returns.
+                }
+            }
+        )
+    } catch (error: Throwable) {
+        errorMessage = error.message ?: "Unable to start Android iPerf"
+    }
+
+    val finalOutput = output.toString()
+    if (errorMessage != null) {
+        AndroidSpeedtestState.Error(errorMessage.orEmpty())
+    } else {
+        AndroidSpeedtestState.Finished(
+            parseAndroidIperfResult(
+                output = finalOutput,
+                streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams else 1,
+            ) ?: AndroidSpeedtestResult(
+                throughput = "No throughput reported",
+                transferred = "-",
+                duration = "${duration}s",
+                streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams.toString() else "1",
+            )
+        )
+    }
+}
+
+/** Builds argv for the native iPerf parser. */
+private fun buildAndroidIperfArguments(
+    server: String,
+    port: Int,
+    duration: Int,
+    streams: Int,
+    mode: SpeedtestMode,
+): Array<String> = buildList {
+    add("iperf3")
+    add("-c")
+    add(server)
+    add("-p")
+    add(port.toString())
+    add("-t")
+    add(duration.toString())
+    add("-i")
+    add("1")
+    if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) {
+        add("-P")
+        add(streams.toString())
+    }
+    if (mode == SpeedtestMode.Download || mode == SpeedtestMode.MultiDownload) {
+        add("-R")
+    }
+}.toTypedArray()
+
+/** Extracts the latest structured stats from standard iperf text output. */
+private fun parseAndroidIperfResult(output: String, streams: Int): AndroidSpeedtestResult? {
+    val resultPattern = Regex("""(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sec\s+(\d+(?:\.\d+)?)\s+([KMG]Bytes)\s+(\d+(?:\.\d+)?)\s+([KMG]bits/sec)""")
+    return output
+        .lineSequence()
+        .mapNotNull { line ->
+            resultPattern.find(line)?.let { match ->
+                AndroidSpeedtestResult(
+                    throughput = "${match.groupValues[5]} ${match.groupValues[6]}",
+                    transferred = "${match.groupValues[3]} ${match.groupValues[4]}",
+                    duration = "${match.groupValues[2]}s",
+                    streams = streams.toString(),
+                )
+            }
+        }
+        .lastOrNull()
+}
+
+/** Displays the Android speedtest run state and controls. */
+@Composable
+private fun AndroidSpeedtestRunnerCard(
+    state: AndroidSpeedtestState,
+    liveResult: AndroidSpeedtestResult?,
+    rateLimitMessage: String?,
+    canStart: Boolean,
+    onRun: () -> Unit,
+) {
+    val isRunning = state is AndroidSpeedtestState.Running
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(androidSpeedtestStateLabel(state), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                if (isRunning) {
+                    CircularProgressIndicator(color = LocalOliloTheme.current.accentColor, modifier = Modifier.size(22.dp))
+                }
+            }
+            when (state) {
+                AndroidSpeedtestState.Ready -> Text(
+                    "Run a short test against the selected Olilo speedtest port. Avoid long duration tests on busy ports.",
+                    color = Color(0xFFCEC1D8),
+                )
+                AndroidSpeedtestState.Running -> {
+                    if (liveResult != null) {
+                        SpeedtestMetricGrid(liveResult)
+                    } else {
+                        Text("Testing against the Olilo network...", color = Color(0xFFCEC1D8))
+                    }
+                }
+                is AndroidSpeedtestState.Finished -> SpeedtestMetricGrid(state.result)
+                is AndroidSpeedtestState.Error -> Text(state.message, color = Color(0xFFFF8A80))
+            }
+            if (rateLimitMessage != null && !isRunning) {
+                Text(rateLimitMessage, style = MaterialTheme.typography.labelMedium, color = Color(0xFFFFD180))
+            }
+            Button(
+                onClick = onRun,
+                enabled = !isRunning && canStart,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (isRunning) "Running..." else "Run Test")
+            }
+        }
+    }
+}
+
+private fun androidSpeedtestStateLabel(state: AndroidSpeedtestState): String = when (state) {
+    AndroidSpeedtestState.Ready -> "Ready"
+    AndroidSpeedtestState.Running -> "Running"
+    is AndroidSpeedtestState.Finished -> "Finished"
+    is AndroidSpeedtestState.Error -> "Error"
+}
+
+/** Displays speedtest stats in the same compact grid used by iOS. */
+@Composable
+private fun SpeedtestMetricGrid(result: AndroidSpeedtestResult) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SpeedtestMetricCard("Throughput", result.throughput, Modifier.weight(1f))
+            SpeedtestMetricCard("Transferred", result.transferred, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SpeedtestMetricCard("Duration", result.duration, Modifier.weight(1f))
+            SpeedtestMetricCard("Streams", result.streams, Modifier.weight(1f))
+        }
+    }
+}
+
+/** Displays one compact speedtest metric. */
+@Composable
+private fun SpeedtestMetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.22f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Displays grouped speedtest controls in one nested configuration card. */
+@Composable
+private fun SpeedtestConfigurationCard(
+    selectedMode: SpeedtestMode,
+    selectedPort: Int,
+    selectedStreams: Int,
+    selectedDuration: Int,
+    isRunning: Boolean,
+    usesMultiStream: Boolean,
+    ports: List<Int>,
+    streamOptions: List<Int>,
+    durationOptions: List<Int>,
+    onModeSelected: (SpeedtestMode) -> Unit,
+    onPortSelected: (Int) -> Unit,
+    onStreamsSelected: (Int) -> Unit,
+    onDurationSelected: (Int) -> Unit,
+) {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("Speedtest Configuration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Type", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SpeedtestMode.entries.forEach { mode ->
+                        SpeedtestSelectionRow(
+                            title = mode.label,
+                            selected = selectedMode == mode,
+                            enabled = !isRunning,
+                            onClick = { onModeSelected(mode) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Available Ports", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ports.forEach { port ->
+                        SpeedtestFilterChip(
+                            selected = selectedPort == port,
+                            label = port.toString(),
+                            enabled = !isRunning,
+                            onClick = { onPortSelected(port) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Streams", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    streamOptions.forEach { streams ->
+                        SpeedtestFilterChip(
+                            selected = selectedStreams == streams,
+                            label = streams.toString(),
+                            enabled = usesMultiStream && !isRunning,
+                            onClick = { onStreamsSelected(streams) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Duration", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    durationOptions.forEach { duration ->
+                        SpeedtestFilterChip(
+                            selected = selectedDuration == duration,
+                            label = "${duration}s",
+                            enabled = !isRunning,
+                            onClick = { onDurationSelected(duration) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Displays one selectable speedtest mode row. */
+@Composable
+private fun SpeedtestSelectionRow(
+    title: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = { if (enabled) onClick() },
+        color = if (selected) LocalOliloTheme.current.accentColor.copy(alpha = 0.25f) else themedChipColor(),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                if (selected) Icons.Filled.CheckCircle else Icons.Filled.Terminal,
+                contentDescription = null,
+                tint = if (selected) LocalOliloTheme.current.accentColor else Color(0xFFE2D8EA),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(title, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Displays a selectable chip for speedtest options. */
+@Composable
+private fun SpeedtestFilterChip(
+    selected: Boolean,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        enabled = enabled,
+        onClick = onClick,
+        label = { Text(label) },
+        colors = FilterChipDefaults.filterChipColors(
+            labelColor = Color.White,
+            selectedLabelColor = Color.White,
+            disabledLabelColor = Color(0xFFCEC1D8).copy(alpha = 0.5f),
+            containerColor = themedChipColor(),
+            selectedContainerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.35f),
+            disabledContainerColor = themedChipColor().copy(alpha = 0.5f),
+        ),
+    )
+}
+
 /** Renders the settings tab. */
 @Composable
 private fun SettingsScreen(navController: NavHostController) {
     val context = LocalContext.current
+    val usesFoldableLayout = usesFoldableContentLayout()
+
+    @Composable
+    fun NotificationsSection() {
+        SettingsSection("Notifications") {
+            SettingsNavRow("Status Updates", Icons.Filled.Notifications, showDivider = false) {
+                navController.navigate("notification-settings")
+            }
+        }
+    }
+
+    @Composable
+    fun AppearanceSection() {
+        SettingsSection("Appearance") {
+            SettingsNavRow("Theme", Icons.Filled.Tune, showDivider = false) {
+                navController.navigate("appearance-settings")
+            }
+        }
+    }
+
+    @Composable
+    fun SupportSection() {
+        SettingsSection("Support") {
+            SettingsNavRow("Contact Us", Icons.Filled.Email) { navController.navigate("contact") }
+            SettingsLinkRow(
+                "Report a Problem",
+                "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
+                Icons.Filled.ReportProblem,
+                navController,
+                showDivider = false,
+            )
+        }
+    }
+
+    @Composable
+    fun ContributorsSection() {
+        SettingsSection("Contributors") {
+            SettingsNavRow("Credits", Icons.Filled.Info, showDivider = false) { navController.navigate("credits") }
+        }
+    }
+
+    @Composable
+    fun ComplianceSection() {
+        SettingsSection("Compliance") {
+            SettingsLinkRow("Privacy Policy", "https://olilo.co.uk/privacy", Icons.Filled.Description, navController)
+            SettingsLinkRow(
+                "Terms & Conditions",
+                "https://olilo.co.uk/terms",
+                Icons.Filled.Description,
+                navController,
+                showDivider = false,
+            )
+        }
+    }
+
+    @Composable
+    fun VersionSection() {
+        SettingsSection("Version") {
+            SettingsLinkRow(
+                title = "Contribute to Olilo Status",
+                url = "https://gitlab.com/team-olilo/status-app",
+                icon = Icons.Filled.Language,
+                navController = navController,
+                logoResId = R.drawable.logo_gitlab,
+                showDivider = false,
+            )
+            Text(
+                appVersion(context),
+                color = Color(0xFFCEC1D8),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .border(
+                        width = 1.dp,
+                        color = Color(0x59CEC1D8),
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                textAlign = TextAlign.Center,
+            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Spacer(Modifier.height(8.dp))
+                Image(
+                    painter = painterResource(R.drawable.olilo),
+                    contentDescription = "Olilo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.height(44.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "(c) 2026 Olilo UK & Ireland Ltd. Company number: 16352417",
+                    color = Color(0xFFCEC1D8),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         OliloTopBar(title = "Settings")
@@ -1571,84 +2483,111 @@ private fun SettingsScreen(navController: NavHostController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (usesFoldableLayout) {
+                item { FoldableContentRow({ NotificationsSection() }, { AppearanceSection() }) }
+                item { FoldableContentRow({ SupportSection() }, { ComplianceSection() }) }
+                item { FoldableContentRow({ ContributorsSection() }, { VersionSection() }) }
+            } else {
+                item { NotificationsSection() }
+                item { AppearanceSection() }
+                item { SupportSection() }
+                item { ContributorsSection() }
+                item { ComplianceSection() }
+                item { VersionSection() }
+            }
+        }
+    }
+}
+
+/** Renders app-wide appearance controls. */
+@Composable
+private fun AppearanceSettingsScreen(
+    navController: NavHostController,
+    onThemeSelected: (OliloTheme) -> Boolean,
+) {
+    val context = LocalContext.current
+    val selectedTheme = LocalOliloTheme.current
+    var isRestartDialogVisible by remember { mutableStateOf(false) }
+
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = "Appearance", navController = navController)
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
             item {
-                SettingsSection("Notifications") {
-                    SettingsNavRow("Status Updates", Icons.Filled.Notifications, showDivider = false) {
-                        navController.navigate("notification-settings")
+                SettingsSection("Theme") {
+                    OliloTheme.entries.forEachIndexed { index, theme ->
+                        ListItem(
+                            headlineContent = { Text(theme.displayName, color = Color.White) },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(theme.accentColor),
+                                )
+                            },
+                            trailingContent = {
+                                if (theme == selectedTheme) {
+                                    Icon(
+                                        Icons.Filled.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = LocalOliloTheme.current.accentColor,
+                                    )
+                                }
+                            },
+                            colors = ListItemDefaults.colors(
+                                containerColor = Color.Transparent,
+                                headlineColor = Color.White,
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Transparent)
+                                .clickable {
+                                    if (theme != selectedTheme) {
+                                        isRestartDialogVisible = onThemeSelected(theme)
+                                    }
+                                }
+                                .semantics {
+                                    role = Role.Button
+                                    stateDescription = if (theme == selectedTheme) "Selected" else "Not selected"
+                                },
+                        )
+                        if (index != OliloTheme.entries.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color.White.copy(alpha = 0.06f)),
+                            )
+                        }
                     }
-                }
-            }
-            item {
-                SettingsSection("Support") {
-                    SettingsNavRow("Contact Us", Icons.Filled.Email) { navController.navigate("contact") }
-                    SettingsLinkRow(
-                        "Report a Problem",
-                        "https://gitlab.com/team-olilo/olilo-status/-/boards/11373269",
-                        Icons.Filled.ReportProblem,
-                        navController,
-                        showDivider = false,
-                    )
-                }
-            }
-            item {
-                SettingsSection("Contributors") {
-                    SettingsNavRow("Credits", Icons.Filled.Info, showDivider = false) { navController.navigate("credits") }
-                }
-            }
-            item {
-                SettingsSection("Compliance") {
-                    SettingsLinkRow("Privacy Policy", "https://olilo.co.uk/privacy", Icons.Filled.Description, navController)
-                    SettingsLinkRow(
-                        "Terms & Conditions",
-                        "https://olilo.co.uk/terms",
-                        Icons.Filled.Description,
-                        navController,
-                        showDivider = false,
-                    )
-                }
-            }
-            item {
-                SettingsSection("Version") {
-                    SettingsLinkRow(
-                        title = "Contribute to Olilo Status",
-                        url = "https://gitlab.com/team-olilo/status-app",
-                        icon = Icons.Filled.Language,
-                        navController = navController,
-                        logoResId = R.drawable.logo_gitlab,
-                        showDivider = false,
-                    )
                     Text(
-                        appVersion(context),
+                        "The selected colour is used across app controls, links, icons, and the app background.",
                         color = Color(0xFFCEC1D8),
                         style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .border(
-                                width = 1.dp,
-                                color = Color(0x59CEC1D8),
-                                shape = RoundedCornerShape(8.dp),
-                            )
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.height(8.dp))
-                        Image(
-                            painter = painterResource(R.drawable.olilo),
-                            contentDescription = "Olilo",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.height(44.dp),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "(c) 2026 Olilo UK & Ireland Ltd. Company number: 16352417",
-                            color = Color(0xFFCEC1D8),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
                 }
             }
         }
+    }
+
+    if (isRestartDialogVisible) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Restart required") },
+            text = { Text("Olilo Status will close now. Reopen it to finish applying your theme.") },
+            confirmButton = {
+                TextButton(onClick = { closeAppForRestart(context) }) {
+                    Text("Close App")
+                }
+            },
+            containerColor = themedDialogColor(),
+            titleContentColor = Color.White,
+            textContentColor = Color.White,
+        )
     }
 }
 
@@ -1905,7 +2844,7 @@ private fun SettingsToggleRow(
 ) {
     ListItem(
         headlineContent = { Text(title, color = Color.White) },
-        leadingContent = { Icon(icon, contentDescription = null, tint = oliloPurple) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor) },
         trailingContent = {
             Switch(
                 checked = checked,
@@ -1916,7 +2855,7 @@ private fun SettingsToggleRow(
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
             headlineColor = Color.White,
-            leadingIconColor = oliloPurple,
+            leadingIconColor = LocalOliloTheme.current.accentColor,
         ),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -1960,13 +2899,13 @@ private fun SettingsRow(
                     modifier = Modifier.size(20.dp),
                 )
             } else {
-                Icon(icon, contentDescription = null, tint = oliloPurple)
+                Icon(icon, contentDescription = null, tint = LocalOliloTheme.current.accentColor)
             }
         },
         colors = ListItemDefaults.colors(
             containerColor = Color.Transparent,
             headlineColor = Color.White,
-            leadingIconColor = oliloPurple,
+            leadingIconColor = LocalOliloTheme.current.accentColor,
         ),
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -2003,12 +2942,102 @@ private fun WebPage(navController: NavHostController, title: String, url: String
             },
             update = {},
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .weight(1f)
                 .semantics {
                     contentDescription = "$title web content"
                 },
         )
     }
+}
+
+/** Displays an in-app iframe page with a top bar. */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun IframePage(navController: NavHostController, title: String, url: String) {
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = title, navController = navController)
+        AndroidView(
+            factory = { context ->
+                WebView(context).apply {
+                    webViewClient = dashboardWebViewClient()
+                    settings.javaScriptEnabled = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.domStorageEnabled = true
+                    settings.databaseEnabled = true
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort = true
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
+                    settings.userAgentString = desktopChromeUserAgent
+                    isHorizontalScrollBarEnabled = true
+                    isVerticalScrollBarEnabled = true
+                    overScrollMode = WebView.OVER_SCROLL_ALWAYS
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    loadUrl(url)
+                }
+            },
+            update = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .semantics {
+                    contentDescription = "$title dashboard content"
+                },
+        )
+    }
+}
+
+private const val desktopChromeUserAgent =
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
+private fun dashboardWebViewClient(): WebViewClient = object : WebViewClient() {
+    override fun onPageFinished(view: WebView?, url: String?) {
+        view?.evaluateJavascript(dashboardViewportFixScript(view.height), null)
+    }
+}
+
+private fun dashboardViewportFixScript(viewportHeight: Int): String {
+    val height = viewportHeight.coerceAtLeast(800)
+    return """
+        (() => {
+            const height = '${height}px';
+            const styleId = 'olilo-dashboard-viewport-fix';
+            let style = document.getElementById(styleId);
+            if (!style) {
+                style = document.createElement('style');
+                style.id = styleId;
+                document.head.appendChild(style);
+            }
+            style.textContent = `
+                html,
+                body,
+                #reactRoot,
+                .main-view,
+                .grafana-app,
+                [data-testid="dashboard-container"] {
+                    width: max-content !important;
+                    min-width: 1200px !important;
+                    min-height: ${'$'}{height} !important;
+                    height: ${'$'}{height} !important;
+                    overflow: auto !important;
+                }
+            `;
+            [document.documentElement, document.body, document.getElementById('reactRoot')]
+                .filter(Boolean)
+                .forEach((element) => {
+                    element.style.setProperty('width', 'max-content', 'important');
+                    element.style.setProperty('min-width', '1200px', 'important');
+                    element.style.setProperty('overflow', 'auto', 'important');
+                    element.style.setProperty('min-height', height, 'important');
+                    element.style.setProperty('height', height, 'important');
+                });
+        })()
+    """.trimIndent()
 }
 
 /** Renders the contact page with social and email links. */

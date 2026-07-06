@@ -1,0 +1,68 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "display-p3:0.81839,0.47265,0.27988,1.00000",
+      "display-p3:0.01453,0.02687,0.03802,1.00000"
+    ],
+    "orientation" : {
+      "start" : {
+        "x" : 0.5,
+        "y" : 0
+      },
+      "stop" : {
+        "x" : 0.5,
+        "y" : 0.7
+      }
+    }
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.96783,0.53365,0.33292,1.00000"
+              }
+            }
+          ],
+          "image-name" : "olilostatus-guage.svg",
+          "name" : "olilostatus-guage",
+          "position" : {
+            "scale" : 0.4,
+            "translation-in-points" : [
+              0,
+              188.9609375
+            ]
+          }
+        },
+        {
+          "image-name" : "olilo-logo.C34wzJbM.png",
+          "name" : "olilo-logo.C34wzJbM",
+          "position" : {
+            "scale" : 0.75,
+            "translation-in-points" : [
+              -0.375,
+              -116.765625
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

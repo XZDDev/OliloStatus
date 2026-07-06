@@ -35,10 +35,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import uk.co.olilo.status.status.oliloBackgroundBottom
-import uk.co.olilo.status.status.oliloBackgroundMid
-import uk.co.olilo.status.status.oliloBackgroundTop
-import uk.co.olilo.status.status.oliloPurple
+import uk.co.olilo.status.status.OliloTheme
+import uk.co.olilo.status.status.loadOliloTheme
 
 class OliloStatusWidgetConfigurationActivity : ComponentActivity() {
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
@@ -60,6 +58,7 @@ class OliloStatusWidgetConfigurationActivity : ComponentActivity() {
 
         setContent {
             WidgetConfigurationScreen(
+                theme = loadOliloTheme(this),
                 onSourceSelected = { sourceName ->
                     OliloStatusWidgetProvider.saveSource(this, appWidgetId, sourceName)
                     OliloStatusWidgetProvider.refreshWidget(
@@ -80,12 +79,12 @@ class OliloStatusWidgetConfigurationActivity : ComponentActivity() {
 
 /** Renders the source picker used while adding a widget. */
 @Composable
-private fun WidgetConfigurationScreen(onSourceSelected: (String) -> Unit) {
+private fun WidgetConfigurationScreen(theme: OliloTheme, onSourceSelected: (String) -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = oliloPurple,
-            background = oliloBackgroundTop,
-            surface = Color(0xD91A1025),
+            primary = theme.accentColor,
+            background = theme.backgroundColors.top,
+            surface = theme.backgroundColors.mid.copy(alpha = 0.85f),
             onSurface = Color.White,
         ),
     ) {
@@ -93,9 +92,9 @@ private fun WidgetConfigurationScreen(onSourceSelected: (String) -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.linearGradient(listOf(
-                    oliloBackgroundTop,
-                    oliloBackgroundMid,
-                    oliloBackgroundBottom
+                    theme.backgroundColors.top,
+                    theme.backgroundColors.mid,
+                    theme.backgroundColors.bottom
                 )))
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(20.dp),
@@ -120,9 +119,9 @@ private fun WidgetConfigurationScreen(onSourceSelected: (String) -> Unit) {
                         .semantics {
                             role = Role.Button
                             contentDescription = "Use $sourceName as the widget status source"
-                        },
+                    },
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xB3261737),
+                    color = theme.backgroundColors.mid.copy(alpha = 0.7f),
                     contentColor = Color.White,
                 ) {
                     Row(
@@ -130,7 +129,7 @@ private fun WidgetConfigurationScreen(onSourceSelected: (String) -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(sourceName, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = oliloPurple)
+                        Icon(Icons.Filled.Check, contentDescription = null, tint = theme.accentColor)
                     }
                 }
             }

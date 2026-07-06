@@ -19,6 +19,14 @@
     {
       "layers" : [
         {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "display-p3:0.26413,0.21051,0.74630,1.00000"
+              }
+            }
+          ],
           "image-name" : "olilostatus-guage.svg",
           "name" : "olilostatus-guage",
           "position" : {

@@ -2,13 +2,90 @@ import Combine
 import SwiftUI
 import UIKit
 
+enum OliloTheme: String, CaseIterable, Identifiable {
+    case oliloPurple
+    case oliloBlue
+    case oliloRed
+    case oliloGreen
+    case oliloOrange
+    case oliloPink
+
+    static let storageKey = "selectedOliloTheme"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .oliloPurple: return "Purple"
+        case .oliloBlue: return "Blue"
+        case .oliloRed: return "Red"
+        case .oliloGreen: return "Green"
+        case .oliloOrange: return "Orange"
+        case .oliloPink: return "Pink"
+        }
+    }
+
+    var accentColor: Color {
+        switch self {
+        case .oliloPurple: return .oliloPurple
+        case .oliloBlue: return .oliloBlue
+        case .oliloRed: return .oliloRed
+        case .oliloGreen: return .oliloGreen
+        case .oliloOrange: return .oliloOrange
+        case .oliloPink: return .oliloPink
+        }
+    }
+
+    var backgroundColors: [Color] {
+        switch self {
+        case .oliloPurple:
+            return [.black, Color(red: 0.13, green: 0.04, blue: 0.24), Color(red: 0.30, green: 0.08, blue: 0.48)]
+        case .oliloBlue:
+            return [.black, Color(red: 0.03, green: 0.09, blue: 0.25), Color(red: 0.05, green: 0.22, blue: 0.48)]
+        case .oliloRed:
+            return [.black, Color(red: 0.22, green: 0.03, blue: 0.06), Color(red: 0.48, green: 0.08, blue: 0.12)]
+        case .oliloGreen:
+            return [.black, Color(red: 0.03, green: 0.16, blue: 0.10), Color(red: 0.04, green: 0.34, blue: 0.20)]
+        case .oliloOrange:
+            return [.black, Color(red: 0.22, green: 0.10, blue: 0.02), Color(red: 0.52, green: 0.22, blue: 0.04)]
+        case .oliloPink:
+            return [.black, Color(red: 0.23, green: 0.03, blue: 0.16), Color(red: 0.54, green: 0.08, blue: 0.38)]
+        }
+    }
+
+    var alternateIconName: String? {
+        switch self {
+        case .oliloPurple: return nil
+        case .oliloBlue: return "OliloBlueIcon"
+        case .oliloRed: return "OliloRedIcon"
+        case .oliloGreen: return "OliloGreenIcon"
+        case .oliloOrange: return "OliloOrangeIcon"
+        case .oliloPink: return "OliloPinkIcon"
+        }
+    }
+
+    static var selected: OliloTheme {
+        OliloTheme(rawValue: UserDefaults.standard.string(forKey: storageKey) ?? "") ?? .oliloPurple
+    }
+}
+
 extension Color {
     static let oliloPurple = Color(red: 0.70, green: 0.28, blue: 1.0)
+    static let oliloBlue = Color(red: 0.16, green: 0.52, blue: 1.0)
+    static let oliloRed = Color(red: 1.0, green: 0.25, blue: 0.32)
+    static let oliloGreen = Color(red: 0.18, green: 0.78, blue: 0.44)
+    static let oliloOrange = Color(red: 1.0, green: 0.55, blue: 0.18)
+    static let oliloPink = Color(red: 1.0, green: 0.30, blue: 0.72)
+
+    static var oliloTheme: Color {
+        OliloTheme.selected.accentColor
+    }
 }
 
 enum AppTab: Hashable {
     case status
     case notices
+    case speedtest
     case settings
 }
 
@@ -50,6 +127,12 @@ struct ContentView: View {
                 }
                 .tag(AppTab.notices)
 
+            SpeedtestView()
+                .tabItem {
+                    Label("Speedtest", systemImage: "speedometer")
+                }
+                .tag(AppTab.speedtest)
+
             SettingsView {
                 isOnboardingPresented = true
             }
@@ -58,7 +141,7 @@ struct ContentView: View {
             }
             .tag(AppTab.settings)
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .preferredColorScheme(.dark)
         .background(OliloDarkGradientBackground())
         .onAppear {
@@ -104,13 +187,11 @@ private struct OnboardingPresenter: ViewModifier {
 }
 
 struct OliloDarkGradientBackground: View {
+    @AppStorage(OliloTheme.storageKey) private var theme: OliloTheme = .oliloPurple
+
     var body: some View {
         LinearGradient(
-            colors: [
-                .black,
-                Color(red: 0.13, green: 0.04, blue: 0.24),
-                Color(red: 0.30, green: 0.08, blue: 0.48)
-            ],
+            colors: theme.backgroundColors,
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

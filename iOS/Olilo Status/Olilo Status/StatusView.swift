@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import Charts
 import UIKit
 
 struct Incident: Identifiable, Decodable {
@@ -327,11 +326,12 @@ private struct StatusWebDestination: Identifiable {
 struct StatusView: View {
     @StateObject private var model = StatusViewModel()
     @State private var presentedWebDestination: StatusWebDestination?
+    @State private var isDashboardPresented = false
     @State private var isComponentEditorPresented = false
     @State private var componentDisplayPreferences = StatusComponentDisplayPreferences.load()
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let dashboardURL = URL(string: "https://stats.olilo.co.uk/")
+    private let dashboardURL = URL(string: "https://dashboard.as212683.net/d/olilo-public-status?orgId=2&from=now-24h&to=now&timezone=browser&refresh=1m&kiosk=1")
     private let portalURL = URL(string: "https://billing.olilo.co.uk")
     private let terminalURL = URL(string: "https://terminal.olilo.co.uk")
     private let wikiURL = URL(string: "https://olilo.co.uk/wiki")
@@ -367,6 +367,7 @@ struct StatusView: View {
                     let visibleIncidents = model.visibleIncidents(using: componentDisplayPreferences)
                     let visibleComponentCount = visibleComponentGroups.reduce(0) { $0 + $1.allComponents.count }
                     let visibleStatus = model.visibleStatus(using: componentDisplayPreferences)
+                    let hasNoActiveStatusItems = visibleAffectedComponents.isEmpty && visibleIncidents.isEmpty && model.maintenances.isEmpty
 
                     ScrollView {
                         LazyVStack(spacing: 18) {
@@ -386,7 +387,7 @@ struct StatusView: View {
                                     usesIPadLayout: usesIPadLayout,
                                     isTerminalEnabled: terminalURL != nil,
                                     isWikiEnabled: wikiURL != nil,
-                                    dashboardAction: { presentWebDestination(title: "Dashboard", url: dashboardURL) },
+                                    dashboardAction: { isDashboardPresented = true },
                                     portalAction: { presentWebDestination(title: "Portal", url: portalURL) },
                                     terminalAction: { presentWebDestination(title: "Terminal", url: terminalURL) },
                                     wikiAction: { presentWebDestination(title: "Wiki", url: wikiURL) }
@@ -396,6 +397,10 @@ struct StatusView: View {
                                 if !visibleAffectedComponents.isEmpty {
                                     StatusSectionHeader(title: "Affected Services", count: visibleAffectedComponents.count)
                                     AffectedServicesCard(components: visibleAffectedComponents)
+                                        .padding(.horizontal)
+                                } else if hasNoActiveStatusItems {
+                                    StatusSectionHeader(title: "Current Activity", count: 0)
+                                    EmptyActiveStatusCard()
                                         .padding(.horizontal)
                                 }
                             }
@@ -453,9 +458,9 @@ struct StatusView: View {
                         isComponentEditorPresented = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Edit status components")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -463,10 +468,10 @@ struct StatusView: View {
                         Task { await model.refresh() }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .disabled(model.isLoading)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Refresh status")
                 }
             }
@@ -486,6 +491,13 @@ struct StatusView: View {
                     groups: model.componentGroups,
                     preferences: $componentDisplayPreferences
                 )
+            }
+            .sheet(isPresented: $isDashboardPresented) {
+                if let dashboardURL {
+                    OliloIframeWebViewSheet(title: "Dashboard", url: dashboardURL)
+                        .presentationDetents([.large])
+                        .presentationDragIndicator(.visible)
+                }
             }
         }
     }
@@ -538,7 +550,7 @@ private struct ComponentDisplayEditor: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .tint(Color.oliloPurple)
+                            .tint(Color.oliloTheme)
                         }
                         .onMove { source, destination in
                             preferences.moveComponents(from: source, to: destination, in: group)
@@ -553,7 +565,7 @@ private struct ComponentDisplayEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     EditButton()
-                        .tint(Color.oliloPurple)
+                        .tint(Color.oliloTheme)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Done") {
@@ -565,13 +577,13 @@ private struct ComponentDisplayEditor: View {
                         preferences.hiddenComponentIDs.removeAll()
                     }
                     .disabled(preferences.hiddenComponentIDs.isEmpty)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                 }
             }
             .scrollContentBackground(.hidden)
             .background(OliloDarkGradientBackground())
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
     }
 
     /// Creates a binding for the component visibility toggle in the editor.
@@ -602,7 +614,7 @@ private struct EmptyComponentsCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Image(systemName: "eye.slash")
                     .font(.title2)
-                    .foregroundStyle(Color.oliloPurple)
+                    .foregroundStyle(Color.oliloTheme)
                 Text("No components shown")
                     .font(.headline)
                 Text("Use the component editor to show services on this page.")
@@ -610,6 +622,39 @@ private struct EmptyComponentsCard: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct EmptyActiveStatusCard: View {
+    var body: some View {
+        StatusCard {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(statusColor("OPERATIONAL"))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("\(statusTimeGreeting()), everything is running normally")
+                        .font(.headline)
+                    Text("No incidents, maintenance, or affected services are active right now.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+private func statusTimeGreeting(now: Date = Date()) -> String {
+    let hour = Calendar.current.component(.hour, from: now)
+    switch hour {
+    case 5...11:
+        return "Good morning"
+    case 12...16:
+        return "Good afternoon"
+    default:
+        return "Good evening"
     }
 }
 
@@ -688,7 +733,7 @@ private struct StatusLinkButton: View {
         }
         .buttonStyle(.bordered)
         .controlSize(usesIPadLayout ? .large : .regular)
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .disabled(!isEnabled)
         .accessibilityHint("Opens \(title)")
     }
@@ -755,10 +800,10 @@ private struct OverviewCard: View {
                         isStatusPagePresented = true
                     } label: {
                         Label("Olilo Status", systemImage: "gauge")
-                            .foregroundStyle(Color.oliloPurple)
+                            .foregroundStyle(Color.oliloTheme)
                     }
                     .buttonStyle(.plain)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
                     .accessibilityLabel("Open Olilo Status page")
                     .accessibilityHint("Opens the public status page")
                     Spacer()
@@ -955,7 +1000,7 @@ private struct ComponentGroupCard: View {
                 } label: {
                     ComponentGroupHeader(group: group)
                 }
-                .tint(Color.oliloPurple)
+                .tint(Color.oliloTheme)
             } else {
                 ComponentGroupHeader(group: group)
             }
@@ -1184,7 +1229,7 @@ func statusSeveritySort(_ lhs: String, _ rhs: String) -> Bool {
 func statusColor(_ status: String) -> Color {
     switch status.uppercased() {
     case "UP", "OPERATIONAL", "RESOLVED", "COMPLETED":
-        return .oliloPurple
+        return .green
     case "UNDERMAINTENANCE", "MONITORING", "NOTSTARTEDYET":
         return .blue
     case "HASISSUES", "HAS_ISSUES", "DEGRADEDPERFORMANCE", "DEGRADED_PERFORMANCE", "IDENTIFIED":

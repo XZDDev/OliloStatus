@@ -76,7 +76,7 @@ struct NotificationSettingsView: View {
             .scrollContentBackground(.hidden)
             .iPadReadableContent()
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .navigationTitle("Status Updates")
         .toolbar {
             ToolbarItem(placement: .principal) {

@@ -27,7 +27,7 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .tint(Color.oliloPurple)
+                    .tint(Color.oliloTheme)
 
                     if selectedPage < pages.indices.last! {
                         Button("Skip Tutorial", action: completionAction)
@@ -49,7 +49,7 @@ struct OnboardingView: View {
                 }
             }
         }
-        .tint(Color.oliloPurple)
+        .tint(Color.oliloTheme)
         .preferredColorScheme(.dark)
     }
 
@@ -127,7 +127,7 @@ private struct OnboardingPageView: View {
 
                 Image(systemName: page.systemImage)
                     .font(.system(size: 72, weight: .semibold))
-                    .foregroundStyle(Color.oliloPurple)
+                    .foregroundStyle(Color.oliloTheme)
                     .symbolRenderingMode(.hierarchical)
                     .accessibilityHidden(true)
 
@@ -155,7 +155,7 @@ private struct OnboardingPageView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         } icon: {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.oliloPurple)
+                                .foregroundStyle(Color.oliloTheme)
                         }
                     }
                 }
