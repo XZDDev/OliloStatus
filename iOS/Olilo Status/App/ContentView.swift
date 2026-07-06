@@ -85,6 +85,7 @@ extension Color {
 enum AppTab: Hashable {
     case status
     case notices
+    case speedtest
     case settings
 }
 
@@ -125,6 +126,12 @@ struct ContentView: View {
                     Label("Notices", systemImage: "bell.badge")
                 }
                 .tag(AppTab.notices)
+
+            SpeedtestView()
+                .tabItem {
+                    Label("Speedtest", systemImage: "speedometer")
+                }
+                .tag(AppTab.speedtest)
 
             SettingsView {
                 isOnboardingPresented = true

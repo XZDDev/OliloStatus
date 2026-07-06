@@ -10,6 +10,7 @@
 		3647C1582FD4C1280090B9AB /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3647C1572FD4C1280090B9AB /* WidgetKit.framework */; };
 		3647C15A2FD4C1280090B9AB /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3647C1592FD4C1280090B9AB /* SwiftUI.framework */; };
 		3647C1692FD4C1290090B9AB /* Olilo Status WidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3647C1552FD4C1280090B9AB /* Olilo Status WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		36839ACE2FFB167800DE5A07 /* IperfSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 36839ACD2FFB167800DE5A07 /* IperfSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +84,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				36839ACE2FFB167800DE5A07 /* IperfSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -161,6 +163,7 @@
 			);
 			name = "Olilo Status";
 			packageProductDependencies = (
+				36839ACD2FFB167800DE5A07 /* IperfSwift */,
 			);
 			productName = "Olilo Status";
 			productReference = 368B8FCE2FCA641D00986EE4 /* Olilo Status.app */;
@@ -193,6 +196,9 @@
 			);
 			mainGroup = 368B8FC52FCA641D00986EE4;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				36839ACC2FFB167800DE5A07 /* XCRemoteSwiftPackageReference "iperf-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 368B8FCF2FCA641D00986EE4 /* Products */;
 			projectDirPath = "";
@@ -266,7 +272,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.olilo.status.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -303,7 +309,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.olilo.status.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -471,7 +477,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.olilo.status;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -516,7 +522,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.olilo.status;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -565,6 +571,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		36839ACC2FFB167800DE5A07 /* XCRemoteSwiftPackageReference "iperf-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/gewill/iperf-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		36839ACD2FFB167800DE5A07 /* IperfSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 36839ACC2FFB167800DE5A07 /* XCRemoteSwiftPackageReference "iperf-swift" */;
+			productName = IperfSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 368B8FC62FCA641D00986EE4 /* Project object */;
 }

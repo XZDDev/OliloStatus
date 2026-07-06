@@ -25,7 +25,17 @@ android {
         // CI sets ANDROID_VERSION_CODE (the GitLab pipeline IID); local builds
         // fall back to 1.
         versionCode = (System.getenv("ANDROID_VERSION_CODE") ?: "1").toInt()
-        versionName = "1.1.0"
+        versionName = "2.0"
+
+        externalNativeBuild {
+            cmake {
+                cFlags += listOf("-std=c11", "-D__STDC_NO_ATOMICS__=0")
+            }
+        }
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
 
     signingConfigs {
@@ -54,6 +64,12 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 }
 

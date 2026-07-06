@@ -1,0 +1,15 @@
+{
+  "originHash" : "1d46f4fd497de2b8a806bb12da9d6be1785e60a15449c8c83f257555c1e72dbb",
+  "pins" : [
+    {
+      "identity" : "iperf-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gewill/iperf-swift.git",
+      "state" : {
+        "revision" : "cf0fa8e08b31ded39516ab4d69a6a3b60db6d983",
+        "version" : "1.3.0"
+      }
+    }
+  ],
+  "version" : 3
+}

@@ -142,7 +142,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalTime
 import java.time.temporal.ChronoUnit
@@ -168,6 +170,8 @@ import uk.co.olilo.status.status.loadOliloTheme
 import uk.co.olilo.status.status.saveOliloTheme
 import uk.co.olilo.status.status.statusColor
 import uk.co.olilo.status.status.statusSeverity
+import uk.co.olilo.status.iperf.AndroidIperfCallback
+import uk.co.olilo.status.iperf.AndroidIperfRunner
 import uk.co.olilo.status.widget.OliloNoticesWidgetProvider
 import uk.co.olilo.status.widget.OliloStatusWidgetProvider
 import androidx.core.content.edit
@@ -218,6 +222,7 @@ private val LocalOliloTheme = staticCompositionLocalOf { OliloTheme.OliloPurple 
 private enum class Route(val path: String, val label: String, val icon: ImageVector) {
     Status("status", "Status", Icons.Filled.Dashboard),
     Notices("notices", "Notices", Icons.Filled.Notifications),
+    Speedtest("speedtest", "Speedtest", Icons.Filled.Terminal),
     Settings("settings", "Settings", Icons.Filled.Settings),
 }
 
@@ -318,6 +323,7 @@ private fun OliloNavHost(
     ) {
         composable(Route.Status.path) { StatusScreen(navController) }
         composable(Route.Notices.path) { NoticesScreen(navController) }
+        composable(Route.Speedtest.path) { SpeedtestScreen() }
         composable(Route.Settings.path) { SettingsScreen(navController) }
         composable("notification-settings") { NotificationSettingsScreen(navController) }
         composable("appearance-settings") { AppearanceSettingsScreen(navController, onThemeSelected) }
@@ -408,6 +414,10 @@ private fun NavHostController.openIframe(title: String, url: String) {
 // Stored separately from component preferences so onboarding can be reset independently if needed.
 private const val ONBOARDING_PREFERENCES_NAME = "onboarding_preferences"
 private const val HAS_COMPLETED_ONBOARDING_KEY = "has_completed_onboarding"
+private const val SPEEDTEST_PREFERENCES_NAME = "speedtest_preferences"
+private const val SPEEDTEST_RUN_TIMESTAMPS_KEY = "speedtest_run_timestamps"
+private const val SPEEDTEST_MAX_RUNS_PER_HOUR = 3
+private const val SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS = 60 * 60 * 1000L
 
 /** Loads whether the first-run onboarding tutorial has been completed. */
 private fun loadHasCompletedOnboarding(context: Context): Boolean =
@@ -420,6 +430,39 @@ private fun saveHasCompletedOnboarding(context: Context, hasCompleted: Boolean) 
         .edit {
             putBoolean(HAS_COMPLETED_ONBOARDING_KEY, hasCompleted)
         }
+}
+
+private fun loadSpeedtestRunTimestamps(context: Context): List<Long> =
+    context.getSharedPreferences(SPEEDTEST_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .getString(SPEEDTEST_RUN_TIMESTAMPS_KEY, "")
+        .orEmpty()
+        .split(",")
+        .mapNotNull { it.toLongOrNull() }
+
+private fun saveSpeedtestRunTimestamps(context: Context, timestamps: List<Long>) {
+    context.getSharedPreferences(SPEEDTEST_PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .edit {
+            putString(SPEEDTEST_RUN_TIMESTAMPS_KEY, timestamps.joinToString(","))
+        }
+}
+
+private fun recentSpeedtestRunTimestamps(
+    timestamps: List<Long>,
+    nowMillis: Long = System.currentTimeMillis(),
+): List<Long> =
+    timestamps
+        .filter { it > nowMillis - SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS }
+        .sorted()
+
+private fun speedtestRateLimitMessage(
+    timestamps: List<Long>,
+    nowMillis: Long = System.currentTimeMillis(),
+): String? {
+    val recentRuns = recentSpeedtestRunTimestamps(timestamps, nowMillis)
+    if (recentRuns.size < SPEEDTEST_MAX_RUNS_PER_HOUR) return null
+    val nextRunMillis = recentRuns.first() + SPEEDTEST_RATE_LIMIT_WINDOW_MILLIS
+    val minutesRemaining = ((nextRunMillis - nowMillis + 59_999L) / 60_000L).coerceAtLeast(1)
+    return "Speedtest limit reached. You can run 3 tests per hour. Try again in $minutesRemaining min."
 }
 
 /** Closes the task and terminates the process after a setting requires a cold start. */
@@ -1847,6 +1890,489 @@ private fun DetailRows(rows: List<Pair<String, String?>>) {
             }
         }
     }
+}
+
+private enum class SpeedtestMode(val label: String) {
+    Upload("Upload"),
+    Download("Download"),
+    MultiUpload("Multi-Stream Upload"),
+    MultiDownload("Multi-Stream Download"),
+}
+
+/** Renders the iperf3 speedtest setup surface. */
+@Composable
+private fun SpeedtestScreen() {
+    val context = LocalContext.current
+    val server = "speedtest.as212683.net"
+    val ports = (5201..5210).toList()
+    val streamOptions = listOf(1, 8, 16, 32)
+    val durationOptions = listOf(5, 10)
+    var selectedMode by remember { mutableStateOf(SpeedtestMode.Download) }
+    var selectedPort by remember { mutableIntStateOf(5201) }
+    var selectedStreams by remember { mutableIntStateOf(8) }
+    var selectedDuration by remember { mutableIntStateOf(10) }
+    var speedtestState by remember { mutableStateOf<AndroidSpeedtestState>(AndroidSpeedtestState.Ready) }
+    var currentSpeedtestResult by remember { mutableStateOf<AndroidSpeedtestResult?>(null) }
+    var speedtestRunTimestamps by remember { mutableStateOf(loadSpeedtestRunTimestamps(context)) }
+    val coroutineScope = rememberCoroutineScope()
+    val usesMultiStream = selectedMode == SpeedtestMode.MultiUpload || selectedMode == SpeedtestMode.MultiDownload
+    val isRunning = speedtestState is AndroidSpeedtestState.Running
+    val rateLimitMessage = speedtestRateLimitMessage(speedtestRunTimestamps)
+    val usesFoldableLayout = usesFoldableContentLayout()
+
+    val runSpeedtest: () -> Unit = {
+        val recentRuns = recentSpeedtestRunTimestamps(speedtestRunTimestamps)
+        if (recentRuns.size >= SPEEDTEST_MAX_RUNS_PER_HOUR) {
+            speedtestRunTimestamps = recentRuns
+            saveSpeedtestRunTimestamps(context, recentRuns)
+        } else {
+            val updatedRuns = recentRuns + System.currentTimeMillis()
+            speedtestRunTimestamps = updatedRuns
+            saveSpeedtestRunTimestamps(context, updatedRuns)
+            currentSpeedtestResult = null
+            speedtestState = AndroidSpeedtestState.Running
+            coroutineScope.launch {
+                speedtestState = runAndroidSpeedtest(
+                    server = server,
+                    port = selectedPort,
+                    duration = selectedDuration,
+                    streams = selectedStreams,
+                    mode = selectedMode,
+                    onProgress = { result ->
+                        coroutineScope.launch {
+                            currentSpeedtestResult = result
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun SpeedtestIntroCard() {
+        StatusCard {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Olilo Public Speed Test", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Test directly against the Olilo network. Please use responsibly, abuse will result in the speedtest being removed from Olilo Status.",
+                    color = Color(0xFFCEC1D8),
+                )
+            }
+        }
+    }
+
+    @Composable
+    fun SpeedtestRunCard() {
+        AndroidSpeedtestRunnerCard(
+            state = speedtestState,
+            liveResult = currentSpeedtestResult,
+            rateLimitMessage = rateLimitMessage,
+            canStart = rateLimitMessage == null,
+            onRun = runSpeedtest,
+        )
+    }
+
+    @Composable
+    fun SpeedtestSettingsCard() {
+        SpeedtestConfigurationCard(
+            selectedMode = selectedMode,
+            selectedPort = selectedPort,
+            selectedStreams = selectedStreams,
+            selectedDuration = selectedDuration,
+            isRunning = isRunning,
+            usesMultiStream = usesMultiStream,
+            ports = ports,
+            streamOptions = streamOptions,
+            durationOptions = durationOptions,
+            onModeSelected = { selectedMode = it },
+            onPortSelected = { selectedPort = it },
+            onStreamsSelected = { selectedStreams = it },
+            onDurationSelected = { selectedDuration = it },
+        )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        OliloTopBar(title = "Speedtest")
+        LazyColumn(
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            if (usesFoldableLayout) {
+                item {
+                    FoldableContentRow(
+                        first = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                SpeedtestIntroCard()
+                                SpeedtestRunCard()
+                            }
+                        },
+                        second = {
+                            SpeedtestSettingsCard()
+                        },
+                    )
+                }
+            } else {
+                item {
+                    SpeedtestIntroCard()
+                }
+
+                item {
+                    SpeedtestRunCard()
+                }
+
+                item {
+                    SpeedtestSettingsCard()
+                }
+            }
+        }
+    }
+}
+
+private sealed interface AndroidSpeedtestState {
+    data object Ready : AndroidSpeedtestState
+    data object Running : AndroidSpeedtestState
+    data class Finished(val result: AndroidSpeedtestResult) : AndroidSpeedtestState
+    data class Error(val message: String) : AndroidSpeedtestState
+}
+
+private data class AndroidSpeedtestResult(
+    val throughput: String,
+    val transferred: String,
+    val duration: String,
+    val streams: String,
+)
+
+/** Runs the Android JNI iperf wrapper off the main thread. */
+private suspend fun runAndroidSpeedtest(
+    server: String,
+    port: Int,
+    duration: Int,
+    streams: Int,
+    mode: SpeedtestMode,
+    onProgress: (AndroidSpeedtestResult) -> Unit,
+): AndroidSpeedtestState = withContext(Dispatchers.IO) {
+    val output = StringBuffer()
+    var errorMessage: String? = null
+    val arguments = buildAndroidIperfArguments(
+        server = server,
+        port = port,
+        duration = duration,
+        streams = streams,
+        mode = mode,
+    )
+    try {
+        AndroidIperfRunner.runIperfLive(
+            arguments,
+            object : AndroidIperfCallback {
+                override fun onOutput(line: String) {
+                    output.append(line)
+                    parseAndroidIperfResult(
+                        output = output.toString(),
+                        streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams else 1,
+                    )?.let(onProgress)
+                }
+
+                override fun onError(error: String) {
+                    errorMessage = error
+                }
+
+                override fun onComplete() {
+                    // Completion is handled after the blocking native call returns.
+                }
+            }
+        )
+    } catch (error: Throwable) {
+        errorMessage = error.message ?: "Unable to start Android iPerf"
+    }
+
+    val finalOutput = output.toString()
+    if (errorMessage != null) {
+        AndroidSpeedtestState.Error(errorMessage.orEmpty())
+    } else {
+        AndroidSpeedtestState.Finished(
+            parseAndroidIperfResult(
+                output = finalOutput,
+                streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams else 1,
+            ) ?: AndroidSpeedtestResult(
+                throughput = "No throughput reported",
+                transferred = "-",
+                duration = "${duration}s",
+                streams = if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) streams.toString() else "1",
+            )
+        )
+    }
+}
+
+/** Builds argv for the native iPerf parser. */
+private fun buildAndroidIperfArguments(
+    server: String,
+    port: Int,
+    duration: Int,
+    streams: Int,
+    mode: SpeedtestMode,
+): Array<String> = buildList {
+    add("iperf3")
+    add("-c")
+    add(server)
+    add("-p")
+    add(port.toString())
+    add("-t")
+    add(duration.toString())
+    add("-i")
+    add("1")
+    if (mode == SpeedtestMode.MultiUpload || mode == SpeedtestMode.MultiDownload) {
+        add("-P")
+        add(streams.toString())
+    }
+    if (mode == SpeedtestMode.Download || mode == SpeedtestMode.MultiDownload) {
+        add("-R")
+    }
+}.toTypedArray()
+
+/** Extracts the latest structured stats from standard iperf text output. */
+private fun parseAndroidIperfResult(output: String, streams: Int): AndroidSpeedtestResult? {
+    val resultPattern = Regex("""(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s+sec\s+(\d+(?:\.\d+)?)\s+([KMG]Bytes)\s+(\d+(?:\.\d+)?)\s+([KMG]bits/sec)""")
+    return output
+        .lineSequence()
+        .mapNotNull { line ->
+            resultPattern.find(line)?.let { match ->
+                AndroidSpeedtestResult(
+                    throughput = "${match.groupValues[5]} ${match.groupValues[6]}",
+                    transferred = "${match.groupValues[3]} ${match.groupValues[4]}",
+                    duration = "${match.groupValues[2]}s",
+                    streams = streams.toString(),
+                )
+            }
+        }
+        .lastOrNull()
+}
+
+/** Displays the Android speedtest run state and controls. */
+@Composable
+private fun AndroidSpeedtestRunnerCard(
+    state: AndroidSpeedtestState,
+    liveResult: AndroidSpeedtestResult?,
+    rateLimitMessage: String?,
+    canStart: Boolean,
+    onRun: () -> Unit,
+) {
+    val isRunning = state is AndroidSpeedtestState.Running
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(androidSpeedtestStateLabel(state), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.weight(1f))
+                if (isRunning) {
+                    CircularProgressIndicator(color = LocalOliloTheme.current.accentColor, modifier = Modifier.size(22.dp))
+                }
+            }
+            when (state) {
+                AndroidSpeedtestState.Ready -> Text(
+                    "Run a short test against the selected Olilo speedtest port. Avoid long duration tests on busy ports.",
+                    color = Color(0xFFCEC1D8),
+                )
+                AndroidSpeedtestState.Running -> {
+                    if (liveResult != null) {
+                        SpeedtestMetricGrid(liveResult)
+                    } else {
+                        Text("Testing against the Olilo network...", color = Color(0xFFCEC1D8))
+                    }
+                }
+                is AndroidSpeedtestState.Finished -> SpeedtestMetricGrid(state.result)
+                is AndroidSpeedtestState.Error -> Text(state.message, color = Color(0xFFFF8A80))
+            }
+            if (rateLimitMessage != null && !isRunning) {
+                Text(rateLimitMessage, style = MaterialTheme.typography.labelMedium, color = Color(0xFFFFD180))
+            }
+            Button(
+                onClick = onRun,
+                enabled = !isRunning && canStart,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (isRunning) "Running..." else "Run Test")
+            }
+        }
+    }
+}
+
+private fun androidSpeedtestStateLabel(state: AndroidSpeedtestState): String = when (state) {
+    AndroidSpeedtestState.Ready -> "Ready"
+    AndroidSpeedtestState.Running -> "Running"
+    is AndroidSpeedtestState.Finished -> "Finished"
+    is AndroidSpeedtestState.Error -> "Error"
+}
+
+/** Displays speedtest stats in the same compact grid used by iOS. */
+@Composable
+private fun SpeedtestMetricGrid(result: AndroidSpeedtestResult) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SpeedtestMetricCard("Throughput", result.throughput, Modifier.weight(1f))
+            SpeedtestMetricCard("Transferred", result.transferred, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SpeedtestMetricCard("Duration", result.duration, Modifier.weight(1f))
+            SpeedtestMetricCard("Streams", result.streams, Modifier.weight(1f))
+        }
+    }
+}
+
+/** Displays one compact speedtest metric. */
+@Composable
+private fun SpeedtestMetricCard(title: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = Color.Black.copy(alpha = 0.22f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = Color(0xFFCEC1D8))
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+/** Displays grouped speedtest controls in one nested configuration card. */
+@Composable
+private fun SpeedtestConfigurationCard(
+    selectedMode: SpeedtestMode,
+    selectedPort: Int,
+    selectedStreams: Int,
+    selectedDuration: Int,
+    isRunning: Boolean,
+    usesMultiStream: Boolean,
+    ports: List<Int>,
+    streamOptions: List<Int>,
+    durationOptions: List<Int>,
+    onModeSelected: (SpeedtestMode) -> Unit,
+    onPortSelected: (Int) -> Unit,
+    onStreamsSelected: (Int) -> Unit,
+    onDurationSelected: (Int) -> Unit,
+) {
+    StatusCard {
+        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("Speedtest Configuration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Type", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SpeedtestMode.entries.forEach { mode ->
+                        SpeedtestSelectionRow(
+                            title = mode.label,
+                            selected = selectedMode == mode,
+                            enabled = !isRunning,
+                            onClick = { onModeSelected(mode) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Available Ports", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ports.forEach { port ->
+                        SpeedtestFilterChip(
+                            selected = selectedPort == port,
+                            label = port.toString(),
+                            enabled = !isRunning,
+                            onClick = { onPortSelected(port) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Streams", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    streamOptions.forEach { streams ->
+                        SpeedtestFilterChip(
+                            selected = selectedStreams == streams,
+                            label = streams.toString(),
+                            enabled = usesMultiStream && !isRunning,
+                            onClick = { onStreamsSelected(streams) },
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Test Duration", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    durationOptions.forEach { duration ->
+                        SpeedtestFilterChip(
+                            selected = selectedDuration == duration,
+                            label = "${duration}s",
+                            enabled = !isRunning,
+                            onClick = { onDurationSelected(duration) },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Displays one selectable speedtest mode row. */
+@Composable
+private fun SpeedtestSelectionRow(
+    title: String,
+    selected: Boolean,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = { if (enabled) onClick() },
+        color = if (selected) LocalOliloTheme.current.accentColor.copy(alpha = 0.25f) else themedChipColor(),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                if (selected) Icons.Filled.CheckCircle else Icons.Filled.Terminal,
+                contentDescription = null,
+                tint = if (selected) LocalOliloTheme.current.accentColor else Color(0xFFE2D8EA),
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(title, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Displays a selectable chip for speedtest options. */
+@Composable
+private fun SpeedtestFilterChip(
+    selected: Boolean,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        enabled = enabled,
+        onClick = onClick,
+        label = { Text(label) },
+        colors = FilterChipDefaults.filterChipColors(
+            labelColor = Color.White,
+            selectedLabelColor = Color.White,
+            disabledLabelColor = Color(0xFFCEC1D8).copy(alpha = 0.5f),
+            containerColor = themedChipColor(),
+            selectedContainerColor = LocalOliloTheme.current.accentColor.copy(alpha = 0.35f),
+            disabledContainerColor = themedChipColor().copy(alpha = 0.5f),
+        ),
+    )
 }
 
 /** Renders the settings tab. */
